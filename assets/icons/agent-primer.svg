@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Agent Primer">
+  <defs>
+    <linearGradient id="bg" x1="40" y1="28" x2="220" y2="228" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#32d6c5"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="76" y1="68" x2="180" y2="184" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f8fafc"/>
+      <stop offset="1" stop-color="#dbeafe"/>
+    </linearGradient>
+    <filter id="shadow" x="22" y="18" width="212" height="220" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#020617" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <rect width="256" height="256" rx="58" fill="#07111c"/>
+  <rect x="22" y="18" width="212" height="220" rx="48" fill="url(#bg)" filter="url(#shadow)"/>
+  <path d="M74 174L128 58l54 116h-28l-10-23H111l10-24h14l-8-20-31 67H74Z" fill="url(#mark)"/>
+  <path d="M88 190h80c18 0 32-14 32-32v-7h-24v7c0 5-3 8-8 8H88c-5 0-8-3-8-8v-7H56v7c0 18 14 32 32 32Z" fill="#ecfeff" opacity="0.96"/>
+  <path d="M72 80h23l-10 24H72c-5 0-8 3-8 8v23H40v-23c0-18 14-32 32-32Z" fill="#ecfeff" opacity="0.82"/>
+</svg>

@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agent Primer</title>
+    <link rel="icon" type="image/svg+xml" href="/static/agent-primer.svg" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260522-1756" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="panel controls">
+        <div class="header-row">
+          <div>
+            <h1>Agent Primer</h1>
+            <p>Prime repositories for high-quality AI coding agents.</p>
+          </div>
+          <div class="header-actions">
+            <button id="settingsButton" type="button" class="secondary-action">Settings</button>
+          </div>
+        </div>
+
+        <section id="settingsPanel" class="settings-panel" hidden>
+          <div class="mini-header">
+            <h2>OpenRouter Settings</h2>
+            <button id="closeSettingsButton" type="button" class="secondary-action">Close</button>
+          </div>
+          <p id="settingsSummary">Checking settings...</p>
+          <label>
+            OpenRouter API key
+            <input id="apiKey" type="password" placeholder="Paste key to save or replace" autocomplete="off" />
+          </label>
+          <label>
+            Default model
+            <select id="model"></select>
+            <span class="field-help">Gemini 3.5 Flash is the default value pick for this workflow.</span>
+          </label>
+          <label id="customModelRow" hidden>
+            Custom OpenRouter model ID
+            <input id="customModel" placeholder="provider/model-id" autocomplete="off" />
+            <span class="field-help">Use the exact model slug from OpenRouter, for example provider/model-name.</span>
+          </label>
+          <button id="saveConfigButton" type="button">Save Settings</button>
+        </section>
+
+        <label>
+          Mode
+          <select id="mode">
+            <option value="new_project">New Project Creation</option>
+            <option value="existing_project">Existing Project Context Setup</option>
+            <option value="verify_repair">Context Verification & Repair</option>
+          </select>
+        </label>
+
+        <label>
+          Target path
+          <div class="path-row">
+            <input id="targetPath" placeholder="/absolute/path/to/parent-or-repo" />
+            <button id="browseButton" type="button" class="secondary-action">Browse</button>
+          </div>
+        </label>
+
+        <div id="newProjectFields">
+          <label>
+            Project name
+            <input id="projectName" placeholder="my-new-project" />
+          </label>
+
+          <label>
+            Raw idea
+            <textarea id="rawIdea" rows="6" placeholder="Describe the product idea in plain language."></textarea>
+          </label>
+        </div>
+
+        <label id="overwriteRow" class="check-row">
+          <input id="overwrite" type="checkbox" />
+          Overwrite existing context files after backup
+        </label>
+
+        <button id="primaryActionButton" class="primary-action">Create Project Context</button>
+      </section>
+
+      <section class="panel result-panel">
+        <div class="result-header">
+          <h2 id="resultTitle">Next Agent Prompt</h2>
+          <div class="score" id="scoreBox">No score</div>
+        </div>
+        <pre id="result">Choose a mode, pick a folder, then run the contextual action.</pre>
+        <div class="prompt-panel">
+          <div class="mini-header">
+            <h3 id="promptTitle">Universal Prompt</h3>
+            <button id="copyPrompt" type="button" class="secondary-action">Copy</button>
+          </div>
+          <textarea id="promptOutput" readonly rows="14"></textarea>
+        </div>
+      </section>
+    </main>
+    <script src="/static/app.js?v=20260522-1925"></script>
+  </body>
+</html>

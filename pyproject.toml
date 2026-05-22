@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-primer"
+version = "0.1.0"
+description = "Local-first GUI that prepares repositories for AI coding agents with AGENTS.md, repo maps, scoring, and repair prompts."
+requires-python = ">=3.11"
+readme = "README.md"
+license = "MIT"
+keywords = [
+  "agents.md",
+  "ai-coding-agents",
+  "agentic-coding",
+  "claude-code",
+  "codex",
+  "context-engineering",
+  "cursor",
+  "developer-tools",
+  "repo-map",
+  "repository-context"
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Web Environment",
+  "Framework :: FastAPI",
+  "Intended Audience :: Developers",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development",
+  "Topic :: Software Development :: Documentation",
+  "Topic :: Software Development :: Quality Assurance"
+]
+dependencies = [
+  "fastapi>=0.115",
+  "httpx>=0.27",
+  "pydantic>=2.8",
+  "uvicorn>=0.30"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2",
+  "pytest-asyncio>=0.23"
+]
+
+[project.scripts]
+agent-primer = "agent_primer.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
