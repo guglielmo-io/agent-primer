@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
@@ -206,7 +207,7 @@ def _run_directory_picker(initial_path: str | None) -> Path | None:
     initial = _resolve_initial_path(initial_path)
     command = _directory_picker_command(initial)
     if command is None:
-        raise HTTPException(status_code=500, detail="No Linux directory picker found. Install zenity, kdialog, or yad.")
+        raise HTTPException(status_code=500, detail="No native directory picker found for this operating system.")
     try:
         result = subprocess.run(command, check=False, capture_output=True, text=True)
     except OSError as exc:
@@ -234,6 +235,14 @@ def _resolve_initial_path(initial_path: str | None) -> Path:
 
 
 def _directory_picker_command(initial: Path) -> list[str] | None:
+    if sys.platform == "darwin":
+        return _macos_directory_picker_command(initial)
+    if sys.platform.startswith("win"):
+        return _windows_directory_picker_command(initial)
+    return _linux_directory_picker_command(initial)
+
+
+def _linux_directory_picker_command(initial: Path) -> list[str] | None:
     if shutil.which("zenity"):
         return [
             "zenity",
@@ -249,3 +258,30 @@ def _directory_picker_command(initial: Path) -> list[str] | None:
     if shutil.which("yad"):
         return ["yad", "--file", "--directory", "--title=Choose folder", f"--filename={initial}/"]
     return None
+
+
+def _macos_directory_picker_command(initial: Path) -> list[str] | None:
+    if not shutil.which("osascript"):
+        return None
+    initial_path = str(initial).replace('"', '\\"')
+    script = (
+        'POSIX path of (choose folder with prompt "Choose repository folder for Agent Primer" '
+        f'default location POSIX file "{initial_path}/")'
+    )
+    return ["osascript", "-e", script]
+
+
+def _windows_directory_picker_command(initial: Path) -> list[str] | None:
+    command = shutil.which("powershell") or shutil.which("pwsh")
+    if not command:
+        return None
+    initial_path = str(initial).replace("'", "''")
+    script = (
+        "Add-Type -AssemblyName System.Windows.Forms; "
+        "$dialog = New-Object System.Windows.Forms.FolderBrowserDialog; "
+        '$dialog.Description = "Choose repository folder for Agent Primer"; '
+        f"$dialog.SelectedPath = '{initial_path}'; "
+        "if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) "
+        "{ [Console]::Out.WriteLine($dialog.SelectedPath) } else { exit 1 }"
+    )
+    return [command, "-NoProfile", "-Command", script]

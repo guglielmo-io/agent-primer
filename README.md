@@ -39,6 +39,19 @@ docs/ai/risks.md
 docs/ai/repo-map.md
 ```
 
+## Agent Instruction Compatibility
+
+`AGENTS.md` is the portable baseline. Tools that support it directly, such as Codex, can load the repository instructions without extra setup.
+
+Some agents still prefer their own instruction files:
+
+- **Codex**: reads `AGENTS.md` directly, including nested overrides.
+- **Claude Code**: commonly uses `CLAUDE.md`.
+- **Gemini-style tools**: commonly use `GEMINI.md`.
+- **Cursor, Windsurf, Copilot, and others**: may combine project rules, IDE settings, and Markdown context files.
+
+Agent Primer keeps `AGENTS.md` as the source of truth and generates prompts that explicitly tell any coding agent to read `AGENTS.md` plus `docs/ai/*.md`. That keeps the context useful even when a tool does not auto-load `AGENTS.md`.
+
 ## Modes
 
 ### 1. New Project Creation
@@ -62,7 +75,8 @@ Agent Primer scores the context pack, reports missing or generic sections, detec
 ## Key Features
 
 - **Local-first GUI**: runs on `127.0.0.1`; no hosted backend.
-- **Native folder picker**: choose target repos through the Linux file picker.
+- **Native folder picker**: choose target repos through Linux, macOS, or Windows file pickers.
+- **Cross-platform runners**: launch from `run/` on Linux, macOS, or Windows.
 - **AGENTS.md support**: generates the standard root instruction file for coding agents.
 - **Structured AI docs**: creates product, context, architecture, verification, constraints, risks, and repo-map files.
 - **Repo-map generation**: detects source areas, tests, CI, auth boundaries, API routes, database layers, and other symbolic areas.
@@ -71,7 +85,41 @@ Agent Primer scores the context pack, reports missing or generic sections, detec
 - **OpenRouter support**: optional model selection for new-project planning.
 - **No target-code changes**: context setup never edits product code.
 
-## Install From Source
+## Run Locally
+
+Linux:
+
+```bash
+./run/linux.sh
+```
+
+macOS:
+
+```bash
+./run/macos.sh
+```
+
+Windows PowerShell:
+
+```powershell
+.\run\windows.ps1
+```
+
+Windows double-click or Command Prompt:
+
+```cmd
+run\windows.cmd
+```
+
+Each runner creates `.venv` when needed, installs Agent Primer in editable mode, and starts the local GUI.
+
+Open:
+
+```text
+http://127.0.0.1:8765
+```
+
+## Manual Install
 
 ```bash
 cd agent-primer
@@ -81,11 +129,15 @@ pip install -e ".[dev]"
 agent-primer
 ```
 
-Open:
+Compatibility:
 
-```text
-http://127.0.0.1:8765
-```
+| OS | Runner | Native folder picker |
+| --- | --- | --- |
+| Linux | `run/linux.sh` | `zenity`, `kdialog`, or `yad` |
+| macOS | `run/macos.sh` | `osascript` |
+| Windows | `run/windows.ps1` or `run/windows.cmd` | PowerShell FolderBrowserDialog |
+
+CI verifies the test suite on Linux, macOS, and Windows for Python 3.11 and 3.12.
 
 ## OpenRouter Settings
 
@@ -141,7 +193,7 @@ node --check web/app.js
 
 ## Roadmap
 
-- Packageable Linux desktop build.
+- Packageable desktop builds.
 - Better repo-map scoring from AST-aware scans.
 - Private benchmark runner for context quality.
 - Optional model comparison pass for new-project planning.

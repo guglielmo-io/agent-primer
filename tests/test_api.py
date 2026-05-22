@@ -3,7 +3,7 @@ from pathlib import Path
 from conftest import FIXTURES
 from fastapi.testclient import TestClient
 
-from agent_primer.app import create_app
+from agent_primer.app import _directory_picker_command, create_app
 from agent_primer.config import AppConfig, ConfigStore
 
 
@@ -90,6 +90,35 @@ def test_native_directory_picker_allows_cancel(monkeypatch):
 
     assert response.status_code == 200
     assert response.json() == {"path": None}
+
+
+def test_directory_picker_supports_linux_zenity(tmp_path, monkeypatch):
+    monkeypatch.setattr("agent_primer.app.sys.platform", "linux")
+    monkeypatch.setattr("agent_primer.app.shutil.which", lambda name: "/usr/bin/zenity" if name == "zenity" else None)
+
+    command = _directory_picker_command(tmp_path)
+
+    assert command[:3] == ["zenity", "--file-selection", "--directory"]
+
+
+def test_directory_picker_supports_macos_osascript(tmp_path, monkeypatch):
+    monkeypatch.setattr("agent_primer.app.sys.platform", "darwin")
+    monkeypatch.setattr("agent_primer.app.shutil.which", lambda name: "/usr/bin/osascript" if name == "osascript" else None)
+
+    command = _directory_picker_command(tmp_path)
+
+    assert command[:2] == ["osascript", "-e"]
+    assert "choose folder" in command[2]
+
+
+def test_directory_picker_supports_windows_powershell(tmp_path, monkeypatch):
+    monkeypatch.setattr("agent_primer.app.sys.platform", "win32")
+    monkeypatch.setattr("agent_primer.app.shutil.which", lambda name: "powershell" if name == "powershell" else None)
+
+    command = _directory_picker_command(tmp_path)
+
+    assert command[:2] == ["powershell", "-NoProfile"]
+    assert "FolderBrowserDialog" in command[3]
 
 
 def test_existing_setup_is_template_only_and_does_not_call_ai(tmp_path, monkeypatch):

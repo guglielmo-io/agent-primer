@@ -71,14 +71,14 @@ def _ci_files(root: Path) -> list[str]:
     workflow_dir = root / ".github" / "workflows"
     if not workflow_dir.exists():
         return []
-    return sorted(str(path.relative_to(root)) for path in workflow_dir.glob("*.y*ml"))
+    return sorted(_relative_path(path, root) for path in workflow_dir.glob("*.y*ml"))
 
 
 def _env_examples(root: Path) -> list[str]:
     patterns = [".env.example", ".env.sample", "*.env.example"]
     matches: set[str] = set()
     for pattern in patterns:
-        matches.update(str(path.relative_to(root)) for path in root.glob(pattern))
+        matches.update(_relative_path(path, root) for path in root.glob(pattern))
     return sorted(matches)
 
 
@@ -91,7 +91,7 @@ def _existing_ai_docs(root: Path) -> list[str]:
     paths = ["AGENTS.md"]
     docs_dir = root / "docs" / "ai"
     if docs_dir.exists():
-        paths.extend(str(path.relative_to(root)) for path in docs_dir.glob("*.md"))
+        paths.extend(_relative_path(path, root) for path in docs_dir.glob("*.md"))
     return sorted(path for path in paths if (root / path).exists())
 
 
@@ -206,5 +206,9 @@ def _symbolic_matches(root: Path, patterns: list[str]) -> list[str]:
     for pattern in patterns:
         for path in root.glob(pattern):
             if path.is_file():
-                matches.add(str(path.relative_to(root)))
+                matches.add(_relative_path(path, root))
     return sorted(matches)
+
+
+def _relative_path(path: Path, root: Path) -> str:
+    return path.relative_to(root).as_posix()
