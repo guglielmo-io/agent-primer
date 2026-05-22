@@ -26,7 +26,8 @@ class ConfigStore:
     def save(self, config: AppConfig) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(config.model_dump_json(indent=2), encoding="utf-8")
-        self.path.chmod(0o600)
+        if os.name != "nt":
+            self.path.chmod(0o600)
 
     def get_api_key(self, request_key: str | None = None) -> str | None:
         env_key = os.getenv("OPENROUTER_API_KEY")

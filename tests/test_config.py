@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from agent_primer.config import AppConfig, ConfigStore
@@ -7,6 +8,10 @@ def test_config_is_written_with_private_permissions(tmp_path: Path):
     store = ConfigStore(tmp_path / "config.json")
 
     store.save(AppConfig(openrouter_api_key="secret", last_model="model"))
+
+    if os.name == "nt":
+        assert (tmp_path / "config.json").exists()
+        return
 
     mode = oct((tmp_path / "config.json").stat().st_mode & 0o777)
     assert mode == "0o600"

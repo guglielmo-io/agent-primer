@@ -155,7 +155,7 @@ Saved settings live at:
 ~/.config/agent-primer/config.json
 ```
 
-The config file is written with `0600` permissions. API keys are never written to target repos or generated context files.
+On POSIX systems, the config file is written with `0600` permissions. On Windows, it is stored under the user's local profile config path. API keys are never written to target repos or generated context files.
 
 ## Model Presets
 
