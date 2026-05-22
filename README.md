@@ -3,6 +3,7 @@
 **Prime any repository for AI coding agents before they touch code.**
 
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![CI](https://github.com/guglielmo-io/agent-primer/actions/workflows/ci.yml/badge.svg)](https://github.com/guglielmo-io/agent-primer/actions/workflows/ci.yml)
 [![FastAPI](https://img.shields.io/badge/FastAPI-local%20GUI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![AGENTS.md](https://img.shields.io/badge/AGENTS.md-ready-111827)](https://github.com/openai/agents.md)
@@ -25,6 +26,21 @@ Agent Primer turns that setup into a repeatable workflow:
 - score context readiness;
 - produce a repair prompt for your coding agent;
 - keep API keys and generated prompts out of target repos.
+
+## Why Not OpenSpec-Style Tools?
+
+Spec-first tools are useful when a team needs a formal contract, generated clients, or a heavy planning process. Agent Primer targets a different problem.
+
+Modern coding agents and AI IDEs already create plans, infer architecture, scaffold code, and run edits inside their own workflows. Adding another large spec system often gives the agent more ceremony to parse, more stale files to maintain, and more context tokens to waste.
+
+Agent Primer is intentionally smaller:
+
+- **No planning DSL**: plain Markdown that any agent can read.
+- **No workflow lock-in**: works with Codex, Claude Code, Cursor, Windsurf, Gemini CLI, OpenCode, and other tools.
+- **No giant spec bundle**: short context files only where they help the agent make better coding decisions.
+- **No duplicate source of truth**: the target repo remains the authority; generated docs must be filled or repaired from real code, tests, manifests, CI, and runtime config.
+
+The core idea is simple: modern agents do not need another heavyweight operating system around them. They need compact, accurate repository context at the moment they start working.
 
 ## What It Creates
 
