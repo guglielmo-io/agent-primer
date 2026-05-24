@@ -15,13 +15,25 @@ MANIFESTS = {
     "pom.xml",
     "composer.json",
 }
+IGNORED_TOP_LEVEL_DIRS = {
+    ".git",
+    ".next",
+    ".venv",
+    "build",
+    "coverage",
+    "dist",
+    "dist-server",
+    "node_modules",
+    "out",
+}
+NPM_DIRECT_SCRIPTS = {"start", "test", "restart", "stop"}
 
 
 def scan_repo(root: Path) -> RepoScan:
     root = root.resolve()
     root_files = _root_files(root)
     top_level_dirs = _top_level_dirs(root)
-    manifest_files = sorted(name for name in root_files if name in MANIFESTS)
+    manifest_files = _manifest_files(root, root_files, top_level_dirs)
     commands: dict[str, str] = {}
     language_hints: list[str] = []
     package_manager = _detect_package_manager(root)
@@ -29,6 +41,15 @@ def scan_repo(root: Path) -> RepoScan:
     if "package.json" in root_files:
         commands.update(_package_commands(root / "package.json", package_manager or "npm"))
         language_hints.append("TypeScript" if _has_ts_files(root) else "JavaScript")
+
+    for manifest in manifest_files:
+        if manifest == "package.json" or not manifest.endswith("/package.json"):
+            continue
+        prefix = manifest.removesuffix("/package.json")
+        manifest_path = root / manifest
+        nested_package_manager = _detect_package_manager(manifest_path.parent) or "npm"
+        commands.update(_package_commands(manifest_path, nested_package_manager, prefix=prefix))
+        language_hints.append("TypeScript" if _has_ts_files(manifest_path.parent) else "JavaScript")
 
     if "pyproject.toml" in root_files or "requirements.txt" in root_files:
         commands.update(_python_commands(root))
@@ -60,7 +81,20 @@ def _root_files(root: Path) -> list[str]:
 
 
 def _top_level_dirs(root: Path) -> list[str]:
-    return sorted(path.name for path in root.iterdir() if path.is_dir() and not path.name.startswith("."))
+    return sorted(
+        path.name
+        for path in root.iterdir()
+        if path.is_dir() and not path.name.startswith(".") and path.name not in IGNORED_TOP_LEVEL_DIRS
+    )
+
+
+def _manifest_files(root: Path, root_files: list[str], top_level_dirs: list[str]) -> list[str]:
+    manifests = {name for name in root_files if name in MANIFESTS}
+    for directory in top_level_dirs:
+        package_json = root / directory / "package.json"
+        if package_json.exists():
+            manifests.add(_relative_path(package_json, root))
+    return sorted(manifests)
 
 
 def _matching(root: Path, names: list[str]) -> list[str]:
@@ -107,7 +141,8 @@ def _critical_files(root: Path) -> list[str]:
         "middleware.js",
     ]
     found = [path for path in candidates if (root / path).exists()]
-    return sorted(dict.fromkeys(found + _ci_files(root) + _env_examples(root)))
+    manifest_files = _manifest_files(root, _root_files(root), _top_level_dirs(root))
+    return sorted(dict.fromkeys(found + manifest_files + _ci_files(root) + _env_examples(root)))
 
 
 def _detect_package_manager(root: Path) -> str | None:
@@ -122,14 +157,27 @@ def _detect_package_manager(root: Path) -> str | None:
     return None
 
 
-def _package_commands(package_json: Path, package_manager: str) -> dict[str, str]:
+def _package_commands(package_json: Path, package_manager: str, prefix: str | None = None) -> dict[str, str]:
     data = json.loads(package_json.read_text(encoding="utf-8"))
     scripts = data.get("scripts", {})
-    commands = {"install": f"{package_manager} install"}
-    for key in ("dev", "test", "lint", "typecheck", "build"):
+    command_prefix = f"{prefix}:" if prefix else ""
+    commands = {f"{command_prefix}install": _scoped_command(f"{package_manager} install", prefix)}
+    for key in ("dev", "test", "lint", "typecheck", "build", "start"):
         if key in scripts:
-            commands[key] = f"{package_manager} {key}"
+            commands[f"{command_prefix}{key}"] = _scoped_command(_script_command(package_manager, key), prefix)
     return commands
+
+
+def _script_command(package_manager: str, key: str) -> str:
+    if package_manager == "npm" and key not in NPM_DIRECT_SCRIPTS:
+        return f"npm run {key}"
+    return f"{package_manager} {key}"
+
+
+def _scoped_command(command: str, prefix: str | None) -> str:
+    if not prefix:
+        return command
+    return f"cd {prefix} && {command}"
 
 
 def _python_commands(root: Path) -> dict[str, str]:
@@ -145,7 +193,12 @@ def _python_commands(root: Path) -> dict[str, str]:
 
 
 def _has_ts_files(root: Path) -> bool:
-    return any(root.glob("**/*.ts")) or any(root.glob("**/*.tsx"))
+    for path in root.rglob("*"):
+        if any(part in IGNORED_TOP_LEVEL_DIRS for part in path.relative_to(root).parts):
+            continue
+        if path.suffix in {".ts", ".tsx"}:
+            return True
+    return False
 
 
 def _symbolic_areas(root: Path) -> list[SymbolicArea]:

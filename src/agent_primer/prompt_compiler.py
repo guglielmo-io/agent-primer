@@ -84,15 +84,28 @@ def compile_repair_prompt(repo_path: str, score: ScoreBreakdown) -> str:
         f"- {finding.severity} {finding.code}: {finding.message}. {finding.recommended_action}."
         for finding in score.findings
     ) or "- No specific findings were generated."
+    categories = "\n".join(f"- {name}: {value}" for name, value in sorted(score.categories.items())) or "- Not available"
     return f"""You are operating inside this software repository:
 {repo_path}
 
 The AI context readiness score is {score.total}/100.
 
-Your task is to repair the AI context pack only.
+Your task is to repair the AI context pack only. Do not edit product code.
+
+Score breakdown:
+{categories}
 
 Findings:
 {findings}
+
+Review protocol:
+- Read AGENTS.md first, then every docs/ai/*.md file.
+- Search for uncompiled markers such as AGENT_FILL, TODO, TBD, placeholder prose, and stale "Not detected" claims.
+- Inspect README files, package manifests, lockfiles, CI, Docker files, env examples, scripts, routes, API handlers, data files, and deployment config.
+- Verify command syntax against the package manager. For npm package scripts, use `npm run <script>` except direct lifecycle commands such as `npm test` and `npm start`.
+- Check nested packages such as api/package.json, packages/*/package.json, or apps/*/package.json when present.
+- Compare docs/ai/repo-map.md against the real source tree. Remove dependency/build outputs such as node_modules, dist, dist-server, coverage, and caches.
+- Keep the docs compact. Future coding agents pay for every token.
 
 Rules:
 - Do not modify application code.
@@ -100,7 +113,21 @@ Rules:
 - Update AGENTS.md and docs/ai/*.md with verified repository-specific facts.
 - Do not invent missing facts.
 - Write "Not detected" only after checking likely evidence locations.
-- Report updated files, remaining blockers, and recommended verification commands.
+- Preserve any user-authored facts that are still true.
+
+Acceptance criteria:
+- No AGENT_FILL or placeholder sections remain.
+- docs/ai/context.md names the actual stack, runtime services, local setup, and important env vars.
+- docs/ai/architecture.md explains the real module boundaries, request/data flow, integrations, and change rules.
+- docs/ai/verification.md contains executable commands with correct package-manager syntax and a narrow-to-broad verification ladder.
+- docs/ai/repo-map.md points future agents to the highest-value files and excludes generated/dependency outputs.
+- docs/ai/constraints.md and docs/ai/risks.md list concrete repository-specific constraints and failure modes.
+
+Final response format:
+- Files updated.
+- Evidence inspected.
+- Verification commands that are valid now.
+- Remaining uncertainty or blockers.
 """
 
 

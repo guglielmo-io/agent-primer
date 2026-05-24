@@ -1,4 +1,4 @@
-from agent_primer.models import ContextPack, ScoreBreakdown
+from agent_primer.models import ContextPack, Finding, ScoreBreakdown
 from agent_primer.prompt_compiler import (
     compile_existing_fill_prompt,
     compile_new_project_validation_prompt,
@@ -28,6 +28,36 @@ def test_repair_prompt_contains_score_and_no_app_code_instruction():
     assert "64" in prompt
     assert "Do not modify application code" in prompt
     assert "repair" in prompt.lower()
+
+
+def test_repair_prompt_contains_actionable_review_protocol():
+    score = ScoreBreakdown(
+        total=61,
+        ready=False,
+        categories={"verification_quality": 7, "repo_map_usefulness": 4},
+        findings=[
+            Finding(
+                severity="P0",
+                code="uncompiled_template",
+                message="Uncompiled template marker found in docs/ai/context.md",
+                recommended_action="Replace AGENT_FILL with verified repository evidence",
+            ),
+            Finding(
+                severity="P1",
+                code="stale_verification_command",
+                message="Verification doc uses npm lint but package scripts require npm run lint",
+                recommended_action="Replace npm lint with npm run lint",
+            ),
+        ],
+    )
+
+    prompt = compile_repair_prompt("/repo", score)
+
+    assert "Score breakdown" in prompt
+    assert "docs/ai/context.md" in prompt
+    assert "npm run lint" in prompt
+    assert "Acceptance criteria" in prompt
+    assert "Final response format" in prompt
 
 
 def test_existing_fill_prompt_orders_agent_to_compile_templates_only():

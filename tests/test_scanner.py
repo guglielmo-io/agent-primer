@@ -41,3 +41,41 @@ def test_empty_project_does_not_invent_commands(tmp_path: Path):
 
     assert scan.commands == {}
     assert scan.manifest_files == []
+
+
+def test_npm_non_lifecycle_scripts_use_run(tmp_path: Path):
+    (tmp_path / "package.json").write_text(
+        '{"scripts":{"dev":"vite","lint":"eslint .","build":"vite build","test":"vitest run"}}',
+        encoding="utf-8",
+    )
+
+    scan = scan_repo(tmp_path)
+
+    assert scan.commands["dev"] == "npm run dev"
+    assert scan.commands["lint"] == "npm run lint"
+    assert scan.commands["build"] == "npm run build"
+    assert scan.commands["test"] == "npm test"
+
+
+def test_scan_includes_top_level_nested_package_manifests(tmp_path: Path):
+    (tmp_path / "package.json").write_text('{"scripts":{"build":"vite build"}}', encoding="utf-8")
+    api_dir = tmp_path / "api"
+    api_dir.mkdir()
+    (api_dir / "package.json").write_text('{"scripts":{"dev":"nodemon src/index.js","start":"node src/index.js"}}', encoding="utf-8")
+
+    scan = scan_repo(tmp_path)
+
+    assert "package.json" in scan.manifest_files
+    assert "api/package.json" in scan.manifest_files
+    assert scan.commands["build"] == "npm run build"
+    assert scan.commands["api:dev"] == "cd api && npm run dev"
+    assert scan.commands["api:start"] == "cd api && npm start"
+
+
+def test_scan_ignores_generated_top_level_directories(tmp_path: Path):
+    for name in ("src", "node_modules", "dist", "dist-server", "coverage"):
+        (tmp_path / name).mkdir()
+
+    scan = scan_repo(tmp_path)
+
+    assert scan.top_level_dirs == ["src"]

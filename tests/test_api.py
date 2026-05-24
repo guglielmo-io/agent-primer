@@ -198,6 +198,28 @@ def test_verify_returns_score_and_repair_prompt():
     assert payload["repair_prompt"]
 
 
+def test_verify_returns_repair_prompt_for_uncompiled_template_context(tmp_path):
+    target = tmp_path / "repo"
+    _copy_fixture(FIXTURES / "node_repo", target)
+    client = TestClient(create_app(config_store=ConfigStore(tmp_path / "config.json")))
+
+    setup_response = client.post("/api/setup/apply", json={
+        "mode": "existing_project",
+        "target_path": str(target),
+        "openrouter_model": "google/gemini-3.5-flash",
+        "overwrite": False,
+    })
+    assert setup_response.status_code == 200
+
+    response = client.post("/api/verify", json={"target_path": str(target)})
+
+    payload = response.json()
+    assert response.status_code == 200
+    assert payload["score"]["ready"] is False
+    assert any(finding["code"] == "uncompiled_template" for finding in payload["score"]["findings"])
+    assert "AGENT_FILL" in payload["repair_prompt"]
+
+
 def _copy_fixture(source: Path, target: Path) -> None:
     for path in source.rglob("*"):
         if path.is_dir():

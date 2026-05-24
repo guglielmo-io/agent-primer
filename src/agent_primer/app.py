@@ -154,7 +154,7 @@ def create_app(config_store: ConfigStore | None = None) -> FastAPI:
             "mode": SetupMode.VERIFY_REPAIR.value,
             "message": "Context verification completed.",
             "score": score.model_dump(),
-            "repair_prompt": compile_repair_prompt(str(request.target_path), score) if not score.ready else None,
+            "repair_prompt": compile_repair_prompt(str(request.target_path), score) if not score.ready or score.findings else None,
         }
 
     return app

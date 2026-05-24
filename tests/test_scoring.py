@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from conftest import FIXTURES
-from agent_primer.context_pack import build_context_pack
+from agent_primer.context_pack import build_context_pack, build_existing_template_pack
 from agent_primer.models import AiContextDraft, RepoScan
 from agent_primer.scoring import score_context_pack, score_existing_context
 
@@ -47,3 +47,41 @@ def test_missing_symbolic_repo_map_gets_actionable_finding():
     score = score_context_pack(pack, scan)
 
     assert any(finding.code == "missing_symbolic_area" for finding in score.findings)
+
+
+def test_uncompiled_template_markers_block_readiness():
+    scan = RepoScan(
+        root_path="/repo",
+        root_files=["README.md", "package.json"],
+        top_level_dirs=["src"],
+        commands={"lint": "npm run lint", "build": "npm run build"},
+    )
+    pack = build_existing_template_pack(scan)
+
+    score = score_context_pack(pack, scan)
+
+    assert score.ready is False
+    assert score.total < 85
+    assert any(finding.code == "uncompiled_template" for finding in score.findings)
+
+
+def test_stale_npm_script_commands_are_reported():
+    scan = RepoScan(
+        root_path="/repo",
+        root_files=["package.json"],
+        top_level_dirs=["src"],
+        commands={"lint": "npm run lint", "build": "npm run build"},
+        package_manager="npm",
+    )
+    pack = build_context_pack(scan, AiContextDraft.example(project_name="Example"))
+    pack.files["docs/ai/verification.md"] = """# Verification
+
+## Detected Commands
+- lint: `npm lint`
+- build: `npm build`
+"""
+
+    score = score_context_pack(pack, scan)
+
+    assert score.ready is False
+    assert any(finding.code == "stale_verification_command" for finding in score.findings)

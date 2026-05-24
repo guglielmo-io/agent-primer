@@ -86,7 +86,7 @@ Agent Primer creates templates with `AGENT_FILL` markers. Your coding agent then
 
 Use this after context exists.
 
-Agent Primer scores the context pack, reports missing or generic sections, detects weak repo maps, and generates a repair prompt that tells your coding agent exactly what to fix.
+Agent Primer reviews the context pack for real failure modes: uncompiled `AGENT_FILL` templates, stale npm command syntax, missing nested package commands, generated directories leaking into the repo map, missing symbolic areas, weak verification docs, and generic placeholders. When anything is wrong, it generates a repair prompt with concrete findings, review steps, acceptance criteria, and a final response format for your coding agent.
 
 ## Key Features
 
@@ -96,8 +96,8 @@ Agent Primer scores the context pack, reports missing or generic sections, detec
 - **AGENTS.md support**: generates the standard root instruction file for coding agents.
 - **Structured AI docs**: creates product, context, architecture, verification, constraints, risks, and repo-map files.
 - **Repo-map generation**: detects source areas, tests, CI, auth boundaries, API routes, database layers, and other symbolic areas.
-- **Readiness scoring**: checks completeness, specificity, verification quality, repo-map usefulness, and stale/generic markers.
-- **Repair prompts**: produces a focused prompt for fixing context without touching app code.
+- **Readiness scoring**: checks completeness, specificity, verification quality, repo-map usefulness, uncompiled templates, stale commands, generated-directory noise, and generic markers.
+- **Repair prompts**: produces a focused repair protocol with concrete findings, evidence-gathering steps, acceptance criteria, and strict no-product-code rules.
 - **OpenRouter support**: optional model selection for new-project planning.
 - **No target-code changes**: context setup never edits product code.
 

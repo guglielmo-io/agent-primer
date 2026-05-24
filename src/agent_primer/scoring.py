@@ -8,6 +8,8 @@ from agent_primer.scanner import scan_repo
 
 
 FORBIDDEN_MARKERS = ("TODO", "TBD", "Lorem ipsum", "Fill this in")
+TEMPLATE_MARKERS = ("AGENT_FILL:",)
+GENERATED_REPO_MAP_DIRS = ("node_modules", "dist", "dist-server", "coverage")
 
 
 def score_existing_context(root: Path) -> ScoreBreakdown:
@@ -33,7 +35,7 @@ def score_context_pack(pack: ContextPack, scan: RepoScan) -> ScoreBreakdown:
     }
     total = sum(categories.values())
     total = _apply_caps(total, pack, scan, findings)
-    return ScoreBreakdown(total=total, ready=total >= 85 and not _blocking(findings), categories=categories, findings=findings)
+    return ScoreBreakdown(total=total, ready=total >= 85 and not findings, categories=categories, findings=findings)
 
 
 def _file_score(pack: ContextPack, findings: list[Finding]) -> int:
@@ -75,6 +77,15 @@ def _verification_score(pack: ContextPack, scan: RepoScan, findings: list[Findin
     if not scan.commands and "Not detected" in text:
         findings.append(Finding(severity="P1", code="no_verification_commands", message="No reliable verification commands detected", recommended_action="Inspect manifests and CI"))
         return 8
+    stale_commands = _add_stale_verification_command_findings(text, scan, findings)
+    for name, command in scan.commands.items():
+        if command not in text and command not in stale_commands:
+            findings.append(Finding(
+                severity="P1",
+                code="missing_verification_command",
+                message=f"Verification doc does not include detected command `{command}` for `{name}`",
+                recommended_action=f"Add `{command}` to docs/ai/verification.md if it is still valid",
+            ))
     matches = sum(1 for command in scan.commands.values() if command in text)
     return min(20, 10 + matches * 3)
 
@@ -99,6 +110,14 @@ def _repo_map_score(pack: ContextPack, scan: RepoScan, findings: list[Finding]) 
         score += 2
     if "Symbolic Areas" in text:
         score += 2
+    for directory in GENERATED_REPO_MAP_DIRS:
+        if _repo_map_lists_directory(text, directory):
+            findings.append(Finding(
+                severity="P1",
+                code="generated_dir_in_repo_map",
+                message=f"Repo map includes generated or dependency directory: {directory}",
+                recommended_action=f"Remove {directory} from docs/ai/repo-map.md unless it is intentionally source-controlled",
+            ))
     missing_areas = [area.name for area in scan.symbolic_areas if area.name not in text]
     for area_name in missing_areas:
         findings.append(Finding(
@@ -115,11 +134,23 @@ def _repo_map_score(pack: ContextPack, scan: RepoScan, findings: list[Finding]) 
 
 
 def _freshness_score(pack: ContextPack, findings: list[Finding]) -> int:
+    has_template_markers = False
+    for path, text in pack.files.items():
+        for marker in TEMPLATE_MARKERS:
+            if marker not in text:
+                continue
+            has_template_markers = True
+            findings.append(Finding(
+                severity="P0",
+                code="uncompiled_template",
+                message=f"Uncompiled template marker `{marker}` found in {path}",
+                recommended_action=f"Replace every `{marker}` section in {path} with verified repository evidence",
+            ))
     joined = "\n".join(pack.files.values())
     generic_markers = [marker for marker in FORBIDDEN_MARKERS if marker in joined]
     for marker in generic_markers:
         findings.append(Finding(severity="P1", code="generic_marker", message=f"Generic marker found: {marker}", recommended_action="Replace generic text with repository evidence"))
-    return 0 if generic_markers else 5
+    return 0 if generic_markers or has_template_markers else 5
 
 
 def _apply_caps(total: int, pack: ContextPack, scan: RepoScan, findings: list[Finding]) -> int:
@@ -129,12 +160,41 @@ def _apply_caps(total: int, pack: ContextPack, scan: RepoScan, findings: list[Fi
         total = min(total, 79)
     if not scan.commands:
         total = min(total, 74)
+    if any(finding.code == "uncompiled_template" for finding in findings):
+        total = min(total, 64)
     if any(finding.code == "generic_marker" for finding in findings):
         total = min(total, 82)
+    if any(finding.code in {"missing_verification_command", "stale_verification_command"} for finding in findings):
+        total = min(total, 82)
+    if any(finding.code == "generated_dir_in_repo_map" for finding in findings):
+        total = min(total, 84)
     if any(finding.code == "missing_symbolic_area" for finding in findings):
-        total = min(total, 88)
+        total = min(total, 84)
     return total
 
 
-def _blocking(findings: list[Finding]) -> bool:
-    return any(finding.severity == "P0" for finding in findings)
+def _add_stale_verification_command_findings(text: str, scan: RepoScan, findings: list[Finding]) -> set[str]:
+    stale_commands: set[str] = set()
+    for name, command in scan.commands.items():
+        stale_command = _stale_npm_command(command)
+        if stale_command and stale_command in text:
+            stale_commands.add(command)
+            findings.append(Finding(
+                severity="P1",
+                code="stale_verification_command",
+                message=f"Verification doc uses `{stale_command}` for `{name}`, but npm scripts require `{command}`",
+                recommended_action=f"Replace `{stale_command}` with `{command}` in docs/ai/verification.md",
+            ))
+    return stale_commands
+
+
+def _stale_npm_command(command: str) -> str | None:
+    if command.startswith("npm run "):
+        return command.replace("npm run ", "npm ", 1)
+    if " && npm run " in command:
+        return command.replace(" && npm run ", " && npm ", 1)
+    return None
+
+
+def _repo_map_lists_directory(text: str, directory: str) -> bool:
+    return any(line.strip() == f"- {directory}" for line in text.splitlines())
