@@ -81,3 +81,15 @@ def test_new_project_prompt_forces_plan_challenge_and_research():
     assert "Do not blindly accept" in prompt
     assert "current research" in prompt
     assert "better approach" in prompt
+
+
+def test_new_project_prompt_requires_five_scored_proposals():
+    pack = ContextPack(files={"AGENTS.md": "# A", "docs/ai/product.md": "# Product"})
+
+    prompt = compile_new_project_validation_prompt("/repo/new-app", pack)
+
+    assert "Create exactly 5 proposals" in prompt
+    assert "score each proposal from 1 to 10" in prompt
+    assert "technology choices" in prompt
+    assert "why another proposal could be better" in prompt
+    assert "Do not write application code" in prompt

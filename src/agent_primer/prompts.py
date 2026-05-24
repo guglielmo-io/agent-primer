@@ -11,7 +11,11 @@ Raw idea: {raw_idea}
 
 Rules:
 - Do not write application code.
-- Mark assumptions as proposed, not detected.
+- Treat the output as a provisional plan that the user's coding agent must verify before implementation.
+- Mark assumptions as proposed, not detected, and do not invent certainty.
+- Prefer boring, durable technology choices unless the idea clearly needs a specialized stack.
+- Include practical verification_commands for the likely future stack.
+- In recommended_prompt, instruct the coding agent to compare 5 proposals before implementation.
 - Do not include API keys or secrets.
 - Return JSON only with keys: product_summary, detected_stack, architecture_notes, verification_commands, constraints, risks, repo_map, readiness_findings, recommended_prompt.
 """

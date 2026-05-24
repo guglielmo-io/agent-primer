@@ -8,20 +8,31 @@ def compile_new_project_validation_prompt(repo_path: str, pack: ContextPack) -> 
     return f"""You are operating inside this new software project:
 {repo_path}
 
-The generated context is a provisional product and architecture plan, not final truth.
+The generated context is a provisional product and architecture plan, not final truth. Your first job is to pressure-test it before any implementation work.
 
 Context files:
 {files}
 
-Your task:
+Required validation workflow:
 - Read AGENTS.md and docs/ai/*.md first.
 - Do not blindly accept the generated plan.
-- Validate the approach with current research, current ecosystem options, and recent market or library evidence.
-- Identify whether a better approach, simpler architecture, stronger library, or safer product direction exists.
+- Inspect the current repo state, package manifests, generated docs, env examples, scripts, and any created source files.
+- Validate the approach with current research, current ecosystem options, recent market evidence, and current library/framework trade-offs.
+- Create exactly 5 proposals for the product and technical approach.
+- For each proposal, score each proposal from 1 to 10 for product fit, implementation speed, maintainability, scalability, cost, security, and agent-buildability.
+- Compare the 5 proposals directly and explain why another proposal could be better than the provisional plan, especially because of technology choices, framework maturity, ecosystem support, hosting/deployment complexity, or long-term maintainability.
+- Select one winner and explain why it is the best implementation direction now.
 - If a better approach exists, update the context files before planning implementation.
+- Update AGENTS.md and docs/ai/*.md so the winning approach, rejected alternatives, key risks, verification commands, and repo map are internally consistent.
 - Ask at most one blocking question only if implementation quality depends on it.
-- Do not write application code until the context is internally consistent.
-- Report the final recommended approach, trade-offs, and first verification commands.
+- Do not write application code until the context is internally consistent and the winning proposal is documented.
+- Do not write application code unless the user explicitly asks you to start implementation after this validation pass.
+
+Final response requirements:
+- Show the 5 proposals with scores.
+- Explain the winning approach and the strongest reason each rejected proposal lost.
+- List context files updated.
+- List first verification commands for the future implementation.
 """
 
 

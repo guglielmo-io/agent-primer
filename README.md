@@ -66,7 +66,15 @@ Some agents still prefer their own instruction files:
 - **Gemini-style tools**: commonly use `GEMINI.md`.
 - **Cursor, Windsurf, Copilot, and others**: may combine project rules, IDE settings, and Markdown context files.
 
-Agent Primer keeps `AGENTS.md` as the source of truth and generates prompts that explicitly tell any coding agent to read `AGENTS.md` plus `docs/ai/*.md`. That keeps the context useful even when a tool does not auto-load `AGENTS.md`.
+Agent Primer keeps `AGENTS.md` as the source of truth and generates prompts that explicitly tell any coding agent to read `AGENTS.md` plus `docs/ai/*.md`. If your IDE or agent does not load `AGENTS.md`, rename or copy it to that tool's preferred file, such as `CLAUDE.md`, `GEMINI.md`, or a project rules file.
+
+For this methodology to work automatically, add a Global instruction to every coding agent you use:
+
+```text
+Before planning or editing any repository, check for AGENTS.md and docs/ai/*.md. If present, read them first, treat code/tests/config as source of truth, and update the context docs when durable project facts change.
+```
+
+Without that global rule, the context still helps when pasted into a prompt, but the agent may not consistently discover it on every session.
 
 ## Modes
 
@@ -74,7 +82,7 @@ Agent Primer keeps `AGENTS.md` as the source of truth and generates prompts that
 
 Use this when you have an idea but no repo yet.
 
-Agent Primer creates the project folder, writes a provisional context pack, and gives you a critical validation prompt. The prompt asks your coding agent to challenge the plan, research current alternatives, and improve the approach before implementation.
+Agent Primer creates the project folder, writes a provisional context pack, and gives you a critical validation prompt. The prompt asks your coding agent to challenge the plan, research current alternatives, create exactly 5 scored implementation proposals, compare their technology trade-offs, choose the strongest approach, and update the context before implementation.
 
 ### 2. Existing Project Context Setup
 
