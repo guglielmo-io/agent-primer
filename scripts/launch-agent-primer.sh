@@ -63,7 +63,8 @@ open_app_window() {
     "$browser" \
       --app="$APP_URL" \
       --user-data-dir="$BROWSER_PROFILE" \
-      --class="AgentPrimer" \
+      --class="agent-primer" \
+      --name="agent-primer" \
       --no-first-run \
       --disable-first-run-ui \
       >/dev/null 2>&1
