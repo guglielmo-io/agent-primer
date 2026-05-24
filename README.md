@@ -185,7 +185,7 @@ You can also choose **Custom OpenRouter model** and enter any supported OpenRout
 
 ## Backups
 
-Existing context files are preserved by default. If overwrite is enabled, backups are written to:
+Existing project setup preserves current context files and cannot overwrite them through the app flow. New project setup can reset generated context files when the target project folder already exists; before replacement, backups are written to:
 
 ```text
 .agent-primer/backups/YYYYMMDD-HHMMSS/
@@ -203,7 +203,7 @@ node --check web/app.js
 - All writes are scoped to the selected target path.
 - Target project dependencies are never installed.
 - API keys are stored only in the local config file.
-- Existing context files are not overwritten unless you enable overwrite.
+- Existing project context files are not overwritten by setup.
 - Generated LLM JSON is validated before use.
 - User input is treated as untrusted path/config input.
 

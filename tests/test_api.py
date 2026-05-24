@@ -148,8 +148,27 @@ def test_existing_setup_is_template_only_and_does_not_call_ai(tmp_path, monkeypa
     assert "AGENT_FILL" in (target / "docs/ai/context.md").read_text(encoding="utf-8")
 
 
+def test_existing_setup_ignores_overwrite_flag(tmp_path):
+    target = tmp_path / "repo"
+    _copy_fixture(FIXTURES / "node_repo", target)
+    (target / "AGENTS.md").write_text("human-authored context", encoding="utf-8")
+    client = TestClient(create_app(config_store=ConfigStore(tmp_path / "config.json")))
+
+    response = client.post("/api/setup/apply", json={
+        "mode": "existing_project",
+        "target_path": str(target),
+        "openrouter_model": "google/gemini-3.5-flash",
+        "overwrite": True,
+    })
+
+    payload = response.json()
+    assert response.status_code == 200
+    assert payload["backup_path"] is None
+    assert (target / "AGENTS.md").read_text(encoding="utf-8") == "human-authored context"
+
+
 def test_new_project_setup_returns_validation_prompt_without_score(tmp_path):
-    client = TestClient(create_app())
+    client = TestClient(create_app(config_store=ConfigStore(tmp_path / "config.json")))
 
     response = client.post("/api/setup/apply", json={
         "mode": "new_project",

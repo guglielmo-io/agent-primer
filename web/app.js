@@ -35,13 +35,14 @@ const els = {
 };
 
 function requestBody() {
+  const isNew = els.mode.value === "new_project";
   return {
     mode: els.mode.value,
     target_path: els.targetPath.value.trim(),
     project_name: els.projectName.value.trim() || null,
     raw_idea: els.rawIdea.value.trim() || null,
     openrouter_model: selectedModelId(),
-    overwrite: els.overwrite.checked,
+    overwrite: isNew && els.overwrite.checked,
   };
 }
 
@@ -245,7 +246,10 @@ function syncMode() {
   const isNew = els.mode.value === "new_project";
   const isVerify = els.mode.value === "verify_repair";
   els.newProjectFields.hidden = !isNew;
-  els.overwriteRow.hidden = isVerify;
+  els.overwriteRow.hidden = !isNew;
+  if (!isNew) {
+    els.overwrite.checked = false;
+  }
   els.resultTitle.textContent = isVerify ? "Result" : "Next Agent Prompt";
   els.result.hidden = !isVerify;
   els.scoreBox.hidden = !isVerify;

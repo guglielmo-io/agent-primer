@@ -127,7 +127,7 @@ def create_app(config_store: ConfigStore | None = None) -> FastAPI:
     @app.post("/api/setup/dry-run")
     async def dry_run(request: SetupRequest) -> dict[str, object]:
         target, _, pack, next_prompt, message = await _build_setup_pack(request, store)
-        planned = plan_writes(target, pack, overwrite=request.overwrite)
+        planned = plan_writes(target, pack, overwrite=_effective_overwrite(request))
         return {
             "mode": request.mode.value,
             "message": message,
@@ -138,7 +138,7 @@ def create_app(config_store: ConfigStore | None = None) -> FastAPI:
     @app.post("/api/setup/apply")
     async def apply_setup(request: SetupRequest) -> dict[str, object]:
         target, _, pack, next_prompt, message = await _build_setup_pack(request, store)
-        write_result = write_context_pack(target, pack, overwrite=request.overwrite)
+        write_result = write_context_pack(target, pack, overwrite=_effective_overwrite(request))
         return {
             "mode": request.mode.value,
             "message": message,
@@ -191,6 +191,10 @@ def _target_path(request: SetupRequest) -> Path:
     if request.mode == SetupMode.NEW_PROJECT:
         return request.target_path / str(request.project_name)
     return request.target_path
+
+
+def _effective_overwrite(request: SetupRequest) -> bool:
+    return request.mode == SetupMode.NEW_PROJECT and request.overwrite
 
 
 async def _draft_new_project_context(request: SetupRequest, scan_result: RepoScan, store: ConfigStore) -> AiContextDraft:
