@@ -68,8 +68,39 @@ def test_scan_includes_top_level_nested_package_manifests(tmp_path: Path):
     assert "package.json" in scan.manifest_files
     assert "api/package.json" in scan.manifest_files
     assert scan.commands["build"] == "npm run build"
-    assert scan.commands["api:dev"] == "cd api && npm run dev"
-    assert scan.commands["api:start"] == "cd api && npm start"
+    assert scan.commands["api:dev"] == "npm --prefix api run dev"
+    assert scan.commands["api:start"] == "npm --prefix api start"
+
+
+def test_scan_detects_deep_package_and_nested_python_project(tmp_path: Path):
+    bot_dir = tmp_path / "bot"
+    bot_dir.mkdir()
+    (bot_dir / "requirements.txt").write_text("aiogram>=3\n", encoding="utf-8")
+    (bot_dir / "main.py").write_text("print('ok')\n", encoding="utf-8")
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir()
+    (tests_dir / "test_config.py").write_text("def test_ok():\n    assert True\n", encoding="utf-8")
+    cache_dir = tests_dir / "__pycache__"
+    cache_dir.mkdir()
+    (cache_dir / "test_config.cpython-312.pyc").write_bytes(b"cache")
+    mcp_dir = tmp_path / "mcp-servers" / "posthog"
+    mcp_dir.mkdir(parents=True)
+    (mcp_dir / "package.json").write_text(
+        '{"scripts":{"build":"tsc","dev":"tsx src/index.ts"}}',
+        encoding="utf-8",
+    )
+
+    scan = scan_repo(tmp_path)
+    areas = {area.name: area.paths for area in scan.symbolic_areas}
+
+    assert "bot/requirements.txt" in scan.manifest_files
+    assert "mcp-servers/posthog/package.json" in scan.manifest_files
+    assert scan.source_dirs == ["bot"]
+    assert scan.commands["bot:test"] == "PYTHONPATH=bot python -m unittest discover -s tests"
+    assert scan.commands["mcp-servers/posthog:build"] == "npm --prefix mcp-servers/posthog run build"
+    assert scan.commands["mcp-servers/posthog:dev"] == "npm --prefix mcp-servers/posthog run dev"
+    assert "tests/test_config.py" in areas["Test Surface"]
+    assert all("__pycache__" not in path for path in areas["Test Surface"])
 
 
 def test_scan_ignores_generated_top_level_directories(tmp_path: Path):

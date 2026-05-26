@@ -94,7 +94,7 @@ def compile_repair_prompt(repo_path: str, score: ScoreBreakdown) -> str:
     findings = "\n".join(
         f"- {finding.severity} {finding.code}: {finding.message}. {finding.recommended_action}."
         for finding in score.findings
-    ) or "- No specific findings were generated."
+    ) or _category_gap_guidance(score)
     categories = "\n".join(f"- {name}: {value}" for name, value in sorted(score.categories.items())) or "- Not available"
     return f"""You are operating inside this software repository:
 {repo_path}
@@ -140,6 +140,25 @@ Final response format:
 - Verification commands that are valid now.
 - Remaining uncertainty or blockers.
 """
+
+
+def _category_gap_guidance(score: ScoreBreakdown) -> str:
+    guidance = {
+        "file_pack_completeness": (15, "Create every required context file and keep paths exactly as expected."),
+        "repository_specificity": (15, "Add concrete stack, manifests, env vars, runtime services, and integration facts from repository evidence."),
+        "architecture_clarity": (10, "Strengthen module boundaries, request/data flow, persistence, background jobs, integrations, and change rules."),
+        "verification_quality": (16, "Add executable narrow-to-broad verification commands from manifests, tests, Docker files, and CI."),
+        "risk_constraints": (10, "Add repository-specific constraints, secrets rules, external-service failure modes, and high-risk edit areas."),
+        "repo_map_usefulness": (10, "Map source dirs, test dirs, critical files, symbolic areas, generated-output exclusions, and navigation notes."),
+        "prompt_quality": (10, "Make AGENTS.md compact but explicit: context loading order, no product-code edits during repair, verification expectations, and done criteria."),
+        "freshness_consistency": (5, "Remove stale generic markers and add a concise freshness note tied to the evidence inspected."),
+    }
+    lines = []
+    for name, value in sorted(score.categories.items()):
+        target, action = guidance.get(name, (0, "Review and strengthen this category from repository evidence."))
+        if value < target:
+            lines.append(f"- P1 score_gap_{name}: {name} is {value}/{target}. {action}")
+    return "\n".join(lines) or "- No specific findings were generated."
 
 
 def _file_list(pack: ContextPack) -> str:

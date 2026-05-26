@@ -19,12 +19,16 @@ IGNORED_TOP_LEVEL_DIRS = {
     ".git",
     ".next",
     ".venv",
+    "__pycache__",
     "build",
     "coverage",
     "dist",
     "dist-server",
     "node_modules",
     "out",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
 }
 NPM_DIRECT_SCRIPTS = {"start", "test", "restart", "stop"}
 
@@ -43,13 +47,19 @@ def scan_repo(root: Path) -> RepoScan:
         language_hints.append("TypeScript" if _has_ts_files(root) else "JavaScript")
 
     for manifest in manifest_files:
-        if manifest == "package.json" or not manifest.endswith("/package.json"):
+        if manifest == "package.json":
             continue
-        prefix = manifest.removesuffix("/package.json")
-        manifest_path = root / manifest
-        nested_package_manager = _detect_package_manager(manifest_path.parent) or "npm"
-        commands.update(_package_commands(manifest_path, nested_package_manager, prefix=prefix))
-        language_hints.append("TypeScript" if _has_ts_files(manifest_path.parent) else "JavaScript")
+        if manifest.endswith("/package.json"):
+            prefix = manifest.removesuffix("/package.json")
+            manifest_path = root / manifest
+            nested_package_manager = _detect_package_manager(manifest_path.parent) or "npm"
+            commands.update(_package_commands(manifest_path, nested_package_manager, prefix=prefix))
+            language_hints.append("TypeScript" if _has_ts_files(manifest_path.parent) else "JavaScript")
+            continue
+        if manifest.endswith("/requirements.txt") or manifest.endswith("/pyproject.toml"):
+            prefix = manifest.rsplit("/", 1)[0]
+            commands.update(_python_commands(root / prefix, project_root=root, prefix=prefix))
+            language_hints.append("Python")
 
     if "pyproject.toml" in root_files or "requirements.txt" in root_files:
         commands.update(_python_commands(root))
@@ -66,7 +76,7 @@ def scan_repo(root: Path) -> RepoScan:
         docker_files=_docker_files(root),
         manifest_files=manifest_files,
         test_dirs=[name for name in top_level_dirs if name in {"test", "tests", "__tests__"}],
-        source_dirs=[name for name in top_level_dirs if name in {"src", "app", "lib", "packages"}],
+        source_dirs=_source_dirs(root, top_level_dirs),
         existing_ai_docs=_existing_ai_docs(root),
         critical_files=_critical_files(root),
         language_hints=sorted(dict.fromkeys(language_hints)),
@@ -88,8 +98,22 @@ def _top_level_dirs(root: Path) -> list[str]:
     )
 
 
+def _source_dirs(root: Path, top_level_dirs: list[str]) -> list[str]:
+    source_dirs = {name for name in top_level_dirs if name in {"src", "app", "lib", "packages"}}
+    for directory in top_level_dirs:
+        if directory in {"test", "tests", "__tests__", "docs"}:
+            continue
+        if any(path.suffix == ".py" and not _is_ignored_path(path, root) for path in (root / directory).rglob("*.py")):
+            source_dirs.add(directory)
+    return sorted(source_dirs)
+
+
 def _manifest_files(root: Path, root_files: list[str], top_level_dirs: list[str]) -> list[str]:
     manifests = {name for name in root_files if name in MANIFESTS}
+    for path in root.rglob("*"):
+        if not path.is_file() or path.name not in MANIFESTS or _is_ignored_path(path, root):
+            continue
+        manifests.add(_relative_path(path, root))
     for directory in top_level_dirs:
         package_json = root / directory / "package.json"
         if package_json.exists():
@@ -177,24 +201,36 @@ def _script_command(package_manager: str, key: str) -> str:
 def _scoped_command(command: str, prefix: str | None) -> str:
     if not prefix:
         return command
+    if command.startswith("npm run "):
+        return f"npm --prefix {prefix} run {command.removeprefix('npm run ')}"
+    if command.startswith("npm "):
+        return f"npm --prefix {prefix} {command.removeprefix('npm ')}"
     return f"cd {prefix} && {command}"
 
 
-def _python_commands(root: Path) -> dict[str, str]:
+def _python_commands(root: Path, project_root: Path | None = None, prefix: str | None = None) -> dict[str, str]:
     text = (root / "pyproject.toml").read_text(encoding="utf-8") if (root / "pyproject.toml").exists() else ""
-    commands = {"test": "pytest"} if "[tool.pytest" in text or (root / "tests").exists() else {}
+    test_root = project_root or root
+    command_prefix = f"{prefix}:" if prefix else ""
+    commands: dict[str, str] = {}
+    if "[tool.pytest" in text:
+        test_command = "pytest"
+        commands[f"{command_prefix}test"] = f"PYTHONPATH={prefix} {test_command}" if prefix else test_command
+    elif (test_root / "tests").exists():
+        test_command = "python -m unittest discover -s tests"
+        commands[f"{command_prefix}test"] = f"PYTHONPATH={prefix} {test_command}" if prefix else test_command
     if "[tool.ruff" in text:
-        commands["lint"] = "ruff check ."
+        commands[f"{command_prefix}lint"] = f"PYTHONPATH={prefix} ruff check ." if prefix else "ruff check ."
     if "[tool.mypy" in text:
-        commands["typecheck"] = "mypy ."
+        commands[f"{command_prefix}typecheck"] = f"PYTHONPATH={prefix} mypy ." if prefix else "mypy ."
     if "[build-system]" in text:
-        commands["build"] = "python -m build"
+        commands[f"{command_prefix}build"] = f"cd {prefix} && python -m build" if prefix else "python -m build"
     return commands
 
 
 def _has_ts_files(root: Path) -> bool:
     for path in root.rglob("*"):
-        if any(part in IGNORED_TOP_LEVEL_DIRS for part in path.relative_to(root).parts):
+        if _is_ignored_path(path, root):
             continue
         if path.suffix in {".ts", ".tsx"}:
             return True
@@ -258,9 +294,14 @@ def _symbolic_matches(root: Path, patterns: list[str]) -> list[str]:
     matches: set[str] = set()
     for pattern in patterns:
         for path in root.glob(pattern):
-            if path.is_file():
+            if path.is_file() and not _is_ignored_path(path, root) and path.suffix != ".pyc":
                 matches.add(_relative_path(path, root))
     return sorted(matches)
+
+
+def _is_ignored_path(path: Path, root: Path) -> bool:
+    relative = path.relative_to(root)
+    return any(part in IGNORED_TOP_LEVEL_DIRS or part.startswith(".") and part != ".github" for part in relative.parts)
 
 
 def _relative_path(path: Path, root: Path) -> str:

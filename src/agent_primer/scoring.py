@@ -77,16 +77,17 @@ def _verification_score(pack: ContextPack, scan: RepoScan, findings: list[Findin
     if not scan.commands and "Not detected" in text:
         findings.append(Finding(severity="P1", code="no_verification_commands", message="No reliable verification commands detected", recommended_action="Inspect manifests and CI"))
         return 8
-    stale_commands = _add_stale_verification_command_findings(text, scan, findings)
-    for name, command in scan.commands.items():
-        if command not in text and command not in stale_commands:
+    verification_commands = _verification_commands(scan.commands)
+    stale_commands = _add_stale_verification_command_findings(text, verification_commands, findings)
+    for name, command in verification_commands.items():
+        if not _command_present(text, command) and command not in stale_commands:
             findings.append(Finding(
                 severity="P1",
                 code="missing_verification_command",
                 message=f"Verification doc does not include detected command `{command}` for `{name}`",
                 recommended_action=f"Add `{command}` to docs/ai/verification.md if it is still valid",
             ))
-    matches = sum(1 for command in scan.commands.values() if command in text)
+    matches = sum(1 for command in verification_commands.values() if _command_present(text, command))
     return min(20, 10 + matches * 3)
 
 
@@ -173,9 +174,21 @@ def _apply_caps(total: int, pack: ContextPack, scan: RepoScan, findings: list[Fi
     return total
 
 
-def _add_stale_verification_command_findings(text: str, scan: RepoScan, findings: list[Finding]) -> set[str]:
+def _verification_commands(commands: dict[str, str]) -> dict[str, str]:
+    return {
+        name: command
+        for name, command in commands.items()
+        if name.split(":")[-1] not in {"dev", "start"}
+    }
+
+
+def _add_stale_verification_command_findings(
+    text: str,
+    commands: dict[str, str],
+    findings: list[Finding],
+) -> set[str]:
     stale_commands: set[str] = set()
-    for name, command in scan.commands.items():
+    for name, command in commands.items():
         stale_command = _stale_npm_command(command)
         if stale_command and stale_command in text:
             stale_commands.add(command)
@@ -186,6 +199,27 @@ def _add_stale_verification_command_findings(text: str, scan: RepoScan, findings
                 recommended_action=f"Replace `{stale_command}` with `{command}` in docs/ai/verification.md",
             ))
     return stale_commands
+
+
+def _command_present(text: str, command: str) -> bool:
+    return any(variant in text for variant in _command_variants(command))
+
+
+def _command_variants(command: str) -> set[str]:
+    variants = {command}
+    if " python " in f" {command} ":
+        variants.add(command.replace(" python ", " .venv/bin/python "))
+        variants.add(command.replace(" python ", " python3 "))
+    if command.startswith("python "):
+        variants.add(command.replace("python ", ".venv/bin/python ", 1))
+        variants.add(command.replace("python ", "python3 ", 1))
+    if command.startswith("npm --prefix "):
+        parts = command.split(" ")
+        if len(parts) >= 4:
+            prefix = parts[2]
+            npm_args = " ".join(parts[3:])
+            variants.add(f"cd {prefix} && npm {npm_args}")
+    return variants
 
 
 def _stale_npm_command(command: str) -> str | None:

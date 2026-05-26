@@ -85,3 +85,40 @@ def test_stale_npm_script_commands_are_reported():
 
     assert score.ready is False
     assert any(finding.code == "stale_verification_command" for finding in score.findings)
+
+
+def test_scoring_accepts_executable_command_variants_and_ignores_dev_scripts():
+    scan = RepoScan(
+        root_path="/repo",
+        root_files=["README.md"],
+        top_level_dirs=["bot", "mcp-servers", "tests"],
+        commands={
+            "bot:test": "PYTHONPATH=bot python -m unittest discover -s tests",
+            "mcp-servers/posthog:install": "npm --prefix mcp-servers/posthog install",
+            "mcp-servers/posthog:build": "npm --prefix mcp-servers/posthog run build",
+            "mcp-servers/posthog:dev": "npm --prefix mcp-servers/posthog run dev",
+        },
+        symbolic_areas=[
+            {"name": "Test Surface", "paths": ["tests/test_config.py"], "evidence": ["tests/test_config.py"]},
+        ],
+    )
+    pack = build_context_pack(scan, AiContextDraft.example(project_name="Example"))
+    pack.files["docs/ai/verification.md"] = """# Verification
+
+## Detected Commands
+- Python unit suite: `PYTHONPATH=bot .venv/bin/python -m unittest discover -s tests`
+- PostHog MCP install: `npm --prefix mcp-servers/posthog install`
+- PostHog MCP build: `npm --prefix mcp-servers/posthog run build`
+
+## Verification Ladder
+- Run focused checks first.
+
+## Evidence
+- Commands verified from nested manifests.
+"""
+
+    score = score_context_pack(pack, scan)
+
+    assert score.ready is True
+    assert score.total >= 85
+    assert not score.findings

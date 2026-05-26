@@ -60,6 +60,26 @@ def test_repair_prompt_contains_actionable_review_protocol():
     assert "Final response format" in prompt
 
 
+def test_repair_prompt_turns_low_category_scores_into_actions_without_findings():
+    score = ScoreBreakdown(
+        total=74,
+        ready=False,
+        categories={
+            "verification_quality": 10,
+            "architecture_clarity": 8,
+            "prompt_quality": 8,
+        },
+    )
+
+    prompt = compile_repair_prompt("/repo", score)
+
+    assert "No specific findings were generated" not in prompt
+    assert "score_gap_verification_quality" in prompt
+    assert "executable narrow-to-broad verification commands" in prompt
+    assert "score_gap_architecture_clarity" in prompt
+    assert "score_gap_prompt_quality" in prompt
+
+
 def test_existing_fill_prompt_orders_agent_to_compile_templates_only():
     pack = ContextPack(files={"AGENTS.md": "# A", "docs/ai/context.md": "AGENT_FILL"})
 
