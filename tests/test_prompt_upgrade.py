@@ -18,13 +18,34 @@ def test_score_prompt_flags_plain_text_prompt_gaps():
 def test_upgrade_prompt_returns_one_copyable_enterprise_prompt():
     result = upgrade_prompt("Build a SaaS dashboard for managing invoices.")
 
-    assert result.upgraded_prompt.count("Raw user request") == 1
-    assert "Infer the task type" in result.upgraded_prompt
+    assert result.upgraded_prompt.count("Original user request") == 1
+    assert "Execute the user's request below" in result.upgraded_prompt
+    assert "Do not merely rewrite the prompt" in result.upgraded_prompt
     assert "If useful, create exactly 5 candidate approaches" in result.upgraded_prompt
     assert "Quality checklist" in result.upgraded_prompt
     assert "Return one final answer" in result.upgraded_prompt
+    assert "You are an expert prompt architect" not in result.upgraded_prompt
     assert result.score.ready is True
     assert result.score.total >= 85
+
+
+def test_upgrade_prompt_specializes_research_architecture_requests():
+    result = upgrade_prompt(
+        "è uscita una repo di nome Openhuman e un sistema di nome Graphify virale su Github "
+        "che sembra migliore dell'approccio classico Wiki in quanto più funzionale e avanzato, "
+        "Fai una ricerca completa sul nostro sistema per capire come integrarlo o se conviene "
+        "o se loro usano un approccio superiore."
+    )
+
+    assert "Openhuman" in result.upgraded_prompt
+    assert "Graphify" in result.upgraded_prompt
+    assert "GitHub" in result.upgraded_prompt or "github" in result.upgraded_prompt
+    assert "current local repository" in result.upgraded_prompt
+    assert "Comparison matrix" in result.upgraded_prompt
+    assert "Create exactly 5 candidate approaches" in result.upgraded_prompt
+    assert "Source evidence with links and dates" in result.upgraded_prompt
+    assert "You are an expert prompt architect" not in result.upgraded_prompt
+    assert result.score.ready is True
 
 
 def test_revision_request_preserves_single_prompt_output_contract():

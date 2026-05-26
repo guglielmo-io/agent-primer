@@ -100,7 +100,7 @@ Agent Primer reviews the context pack for real failure modes: uncompiled `AGENT_
 
 Use this when you have a rough prompt, idea, task, or messy requirement and want one final prompt that can be pasted into any capable AI assistant or coding agent.
 
-Agent Primer scores the prompt, then creates a single upgraded prompt that tells the target AI to infer the task type, resolve ambiguity, choose the best approach, use 5 candidate strategies when useful, compare them, and run an internal quality checklist before producing the final output. The output is always one final prompt, not separate agent and optimized prompt variants.
+Agent Primer scores the prompt, then creates a single operational prompt for the target AI to execute. It preserves the user's request, adds grounding rules, chooses a useful workflow, requires source-backed research when facts may have changed, uses 5 candidate strategies when useful, compares them, and includes a quality checklist. Research and architecture prompts get a specialized flow for repository inspection, GitHub/source evidence, comparison matrices, scored adoption options, and implementation or non-adoption plans. The output is always one final prompt, not separate agent and optimized prompt variants.
 
 After the first upgrade, you can enter a **Revision request** such as "make it stricter for coding agents" or "make it more concise". That regeneration uses OpenRouter and returns a new single upgraded prompt with a refreshed Prompt score. The first deterministic upgrade works without an API key.
 
