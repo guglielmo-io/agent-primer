@@ -19,9 +19,10 @@ def test_upgrade_prompt_returns_one_copyable_enterprise_prompt():
     result = upgrade_prompt("Build a SaaS dashboard for managing invoices.")
 
     assert result.upgraded_prompt.count("Original user request") == 1
-    assert "Execute the user's request below" in result.upgraded_prompt
-    assert "Do not merely rewrite the prompt" in result.upgraded_prompt
-    assert "If useful, create exactly 5 candidate approaches" in result.upgraded_prompt
+    assert "principal software engineer" in result.upgraded_prompt
+    assert "Execute the user's software request below" in result.upgraded_prompt
+    assert "smallest correct change" in result.upgraded_prompt
+    assert "exactly 5 candidate approaches" not in result.upgraded_prompt
     assert "Quality checklist" in result.upgraded_prompt
     assert "Return one final answer" in result.upgraded_prompt
     assert "You are an expert prompt architect" not in result.upgraded_prompt
@@ -45,6 +46,36 @@ def test_upgrade_prompt_specializes_research_architecture_requests():
     assert "Create exactly 5 candidate approaches" in result.upgraded_prompt
     assert "Source evidence with links and dates" in result.upgraded_prompt
     assert "You are an expert prompt architect" not in result.upgraded_prompt
+    assert result.score.ready is True
+
+
+def test_upgrade_prompt_does_not_force_proposals_for_writing_requests():
+    result = upgrade_prompt("Scrivimi un messaggio WhatsApp professionale per chiedere un aggiornamento.")
+
+    assert "senior communications editor" in result.upgraded_prompt
+    assert "Final text" in result.upgraded_prompt
+    assert "exactly 5 candidate approaches" not in result.upgraded_prompt
+    assert "Comparison matrix" not in result.upgraded_prompt
+    assert result.score.ready is True
+
+
+def test_upgrade_prompt_uses_direct_explanation_shape_for_explanation_requests():
+    result = upgrade_prompt("Spiega in parole semplici come funziona questo tool.")
+
+    assert "senior domain explainer" in result.upgraded_prompt
+    assert "Direct answer" in result.upgraded_prompt
+    assert "unnecessary strategy document" in result.upgraded_prompt
+    assert "exactly 5 candidate approaches" not in result.upgraded_prompt
+    assert result.score.ready is True
+
+
+def test_upgrade_prompt_uses_decision_shape_without_fixed_proposal_count():
+    result = upgrade_prompt("Secondo te è meglio sostituire il sistema attuale o migliorarlo?")
+
+    assert "senior decision analyst" in result.upgraded_prompt
+    assert "Do not force a fixed number of proposals" in result.upgraded_prompt
+    assert "Recommended path" in result.upgraded_prompt
+    assert "exactly 5 candidate approaches" not in result.upgraded_prompt
     assert result.score.ready is True
 
 

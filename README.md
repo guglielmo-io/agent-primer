@@ -100,7 +100,7 @@ Agent Primer reviews the context pack for real failure modes: uncompiled `AGENT_
 
 Use this when you have a rough prompt, idea, task, or messy requirement and want one final prompt that can be pasted into any capable AI assistant or coding agent.
 
-Agent Primer scores the prompt, then creates a single operational prompt for the target AI to execute. It preserves the user's request, adds grounding rules, chooses a useful workflow, requires source-backed research when facts may have changed, uses 5 candidate strategies when useful, compares them, and includes a quality checklist. Research and architecture prompts get a specialized flow for repository inspection, GitHub/source evidence, comparison matrices, scored adoption options, and implementation or non-adoption plans. The output is always one final prompt, not separate agent and optimized prompt variants.
+Agent Primer scores the prompt, infers the request type, then creates a single operational prompt for the target AI to execute. It does not force one universal template: software tasks get an implementation and verification workflow, decision prompts get recommendation criteria, writing prompts prioritize final copy, explanation prompts stay direct, and research/architecture prompts get source-backed investigation with scored alternatives when that is actually useful. The output is always one final prompt, not separate agent and optimized prompt variants.
 
 After the first upgrade, you can enter a **Revision request** such as "make it stricter for coding agents" or "make it more concise". That regeneration uses OpenRouter and returns a new single upgraded prompt with a refreshed Prompt score. The first deterministic upgrade works without an API key.
 
@@ -114,7 +114,7 @@ After the first upgrade, you can enter a **Revision request** such as "make it s
 - **Repo-map generation**: detects source areas, tests, CI, auth boundaries, API routes, database layers, and other symbolic areas.
 - **Readiness scoring**: checks completeness, specificity, verification quality, repo-map usefulness, uncompiled templates, stale commands, generated-directory noise, and generic markers.
 - **Repair prompts**: produces a focused repair protocol with concrete findings, evidence-gathering steps, acceptance criteria, and strict no-product-code rules.
-- **Prompt Upgrade**: turns plain text into one final enterprise-grade prompt with Prompt score and optional OpenRouter-powered Revision request.
+- **Intent-aware Prompt Upgrade**: turns plain text into one final enterprise-grade prompt with a task-specific structure, Prompt score, and optional OpenRouter-powered Revision request.
 - **OpenRouter support**: optional model selection for new-project planning.
 - **No target-code changes**: context setup never edits product code.
 
