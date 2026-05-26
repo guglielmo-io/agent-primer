@@ -227,13 +227,29 @@ def _command_variants(command: str) -> set[str]:
 
 
 def _manual_verification_commands_present(text: str) -> bool:
-    if "Not detected" in text:
-        return False
     command_pattern = re.compile(
         r"`[^`\n]*(?:test|check|lint|build|verify|pytest|unittest|cargo|go|dotnet|mvn|gradle|make|just|task)[^`\n]*`",
         re.IGNORECASE,
     )
-    return bool(command_pattern.search(text))
+    return any(
+        command_pattern.search(line)
+        for line in text.splitlines()
+        if not _manual_command_line_is_negative_evidence(line)
+    )
+
+
+def _manual_command_line_is_negative_evidence(line: str) -> bool:
+    lower = line.lower()
+    return any(
+        marker in lower
+        for marker in (
+            "not detected",
+            "intentionally excluded",
+            "do not run",
+            "not valid",
+            "stale",
+        )
+    )
 
 
 def _stale_npm_command(command: str) -> str | None:
