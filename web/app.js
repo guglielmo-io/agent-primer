@@ -252,6 +252,9 @@ async function runPrimaryAction() {
   const isPromptUpgrade = els.mode.value === "prompt_upgrade";
   const url = isPromptUpgrade ? "/api/prompt/upgrade" : isVerify ? "/api/verify" : "/api/setup/apply";
   setStatus(isPromptUpgrade ? "Upgrading prompt" : isVerify ? "Verifying" : "Writing files");
+  if (isPromptUpgrade) {
+    els.revisionFields.hidden = true;
+  }
   els.result.hidden = !(isVerify || isPromptUpgrade);
   els.scoreBox.hidden = !(isVerify || isPromptUpgrade);
   els.result.textContent = isPromptUpgrade ? "Upgrading prompt..." : isVerify ? "Verifying context..." : "";

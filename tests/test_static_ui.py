@@ -34,6 +34,7 @@ def test_prompt_upgrade_mode_has_dedicated_fields_and_no_target_path():
     assert 'els.targetPathRow.hidden = isPromptUpgrade' in app_js
     assert "const hasPromptUpgradeResult = isPromptUpgrade" in app_js
     assert "els.result.hidden = isPromptUpgrade ? !hasPromptUpgradeResult : !isVerify" in app_js
+    assert "if (isPromptUpgrade) {\n    els.revisionFields.hidden = true;\n  }" in app_js
     assert 'els.rawPrompt.addEventListener("input", resetPromptUpgradeResult)' in app_js
     assert '"/api/prompt/upgrade"' in app_js
     assert '"/api/prompt/revise"' in app_js
