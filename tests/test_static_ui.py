@@ -43,3 +43,5 @@ def test_prompt_upgrade_mode_has_dedicated_fields_and_no_target_path():
     assert '"/api/prompt/revise"' in app_js
     assert "openrouter_model: selectedModelId()" in app_js
     assert "ai_review: payload.ai_review || null" in app_js
+    assert "repair_ai_review: payload.repair_ai_review || null" in app_js
+    assert "repair_source: payload.repair_source || null" in app_js

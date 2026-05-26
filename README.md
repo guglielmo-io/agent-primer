@@ -94,7 +94,7 @@ Agent Primer creates templates with `AGENT_FILL` markers. Your coding agent then
 
 Use this after context exists.
 
-Agent Primer reviews the context pack for real failure modes: uncompiled `AGENT_FILL` templates, stale npm command syntax, missing nested package commands, generated directories leaking into the repo map, missing symbolic areas, weak verification docs, and generic placeholders. When anything is wrong, it generates a repair prompt with concrete findings, review steps, acceptance criteria, and a final response format for your coding agent.
+Agent Primer reviews the context pack for real failure modes: uncompiled `AGENT_FILL` templates, stale npm command syntax, missing nested package commands, generated directories leaking into the repo map, missing symbolic areas, weak verification docs, and generic placeholders. When anything is wrong, it generates a repair prompt with concrete findings, review steps, acceptance criteria, and a final response format for your coding agent. If an OpenRouter API key is configured, the selected model rewrites that repair prompt with an AI quality review while preserving the hard boundary: Agent Primer does not compile the context files or modify product code.
 
 ### 4. Prompt Upgrade
 
@@ -113,9 +113,9 @@ After the first upgrade, you can enter a **Revision request** such as "make it s
 - **Structured AI docs**: creates product, context, architecture, verification, constraints, risks, and repo-map files.
 - **Repo-map generation**: detects source areas, tests, CI, auth boundaries, API routes, database layers, and other symbolic areas.
 - **Readiness scoring**: checks completeness, specificity, verification quality, repo-map usefulness, uncompiled templates, stale commands, generated-directory noise, and generic markers.
-- **Repair prompts**: produces a focused repair protocol with concrete findings, evidence-gathering steps, acceptance criteria, and strict no-product-code rules.
+- **AI-assisted repair prompts**: produces a focused repair protocol with concrete findings, evidence-gathering steps, acceptance criteria, strict no-product-code rules, and an AI rewrite when OpenRouter is configured.
 - **AI-first Prompt Upgrade**: turns plain text into one final enterprise-grade prompt with a task-specific structure, Prompt score, AI quality review when OpenRouter is configured, and optional OpenRouter-powered Revision request.
-- **OpenRouter support**: optional model selection for new-project planning.
+- **OpenRouter support**: optional model selection for new-project planning, prompt upgrade, and AI-assisted repair prompts.
 - **No target-code changes**: context setup never edits product code.
 
 ## Run Locally

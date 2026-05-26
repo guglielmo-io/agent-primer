@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from agent_primer.models import ContextPack, ScoreBreakdown
+from agent_primer.models import ContextPack, RepoScan, ScoreBreakdown
 
 
 def compile_new_project_validation_prompt(repo_path: str, pack: ContextPack) -> str:
@@ -151,6 +151,71 @@ Final response format:
 """
 
 
+def build_ai_repair_prompt_request(
+    repo_path: str,
+    score: ScoreBreakdown,
+    scan: RepoScan,
+    local_repair_prompt: str,
+) -> str:
+    findings = "\n".join(
+        f"- {finding.severity} {finding.code}: {finding.message}. {finding.recommended_action}."
+        for finding in score.findings
+    ) or _category_gap_guidance(score)
+    return f"""You are a principal AI context engineer and repair-prompt reviewer.
+
+Mission:
+Generate the strongest possible repair prompt for the user's coding agent to repair this repository's AI context pack.
+
+Hard boundary:
+- Do not compile or edit the context files yourself.
+- Do not modify product code.
+- Your output is only the prompt that the user will paste into their coding agent inside the repository.
+- The coding agent will perform repair from repository evidence.
+- The repair prompt must be specific to the score, findings, scan evidence, and context-pack failure modes below.
+
+Repository:
+{repo_path}
+
+Context readiness score:
+{score.total}/100
+
+Score categories:
+{score.model_dump_json(indent=2)}
+
+Findings or score gaps:
+{findings}
+
+Deterministic scan evidence:
+{scan.model_dump_json(indent=2)}
+
+Local deterministic repair prompt:
+{_block(local_repair_prompt)}
+
+Repair-prompt requirements:
+- Preserve all useful hard rules from the local deterministic repair prompt.
+- Prioritize the highest-impact context weaknesses first.
+- Include a universal evidence sweep for unsupported or custom stacks.
+- Make the downstream agent inspect AGENTS.md and every docs/ai/*.md file before editing.
+- Make the downstream agent inspect code, tests, manifests, lockfiles, CI, Docker, env examples, scripts, README files, runtime config, and nested project roots.
+- Require verified repository-specific facts only. Do not allow invented facts.
+- Require "Not detected" only after likely evidence locations were checked.
+- Require compact docs because future coding agents pay for every token.
+- Require the downstream agent to report files updated, evidence inspected, valid verification commands, and remaining uncertainty.
+- Keep the prompt concise enough to paste into a coding agent, but specific enough to prevent generic repair.
+
+Return JSON only with exactly these keys:
+{{
+  "repair_prompt": "one final repair prompt, no markdown wrapper outside this string",
+  "quality_analysis": {{
+    "summary": "one short quality verdict",
+    "score": 1,
+    "why_this_prompt_is_specific": "short reason",
+    "risks": ["remaining risk or uncertainty"]
+  }}
+}}
+"""
+
+
 def _category_gap_guidance(score: ScoreBreakdown) -> str:
     guidance = {
         "file_pack_completeness": (15, "Create every required context file and keep paths exactly as expected."),
@@ -172,3 +237,7 @@ def _category_gap_guidance(score: ScoreBreakdown) -> str:
 
 def _file_list(pack: ContextPack) -> str:
     return "\n".join(f"- {path}" for path in sorted(pack.files))
+
+
+def _block(text: str) -> str:
+    return f"```text\n{text.strip()}\n```"

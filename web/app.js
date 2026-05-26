@@ -93,7 +93,12 @@ function setResult(payload) {
     return;
   }
   els.resultTitle.textContent = "Result";
-  els.result.textContent = JSON.stringify({message: payload.message, score: payload.score}, null, 2);
+  els.result.textContent = JSON.stringify({
+    message: payload.message,
+    repair_source: payload.repair_source || null,
+    repair_ai_review: payload.repair_ai_review || null,
+    score: payload.score,
+  }, null, 2);
   const score = payload.score?.total;
   els.scoreBox.textContent = Number.isInteger(score) ? `${score}/100` : "No score";
   const useRepair = Boolean(payload.repair_prompt);
@@ -270,7 +275,10 @@ async function runPrimaryAction() {
         openrouter_model: selectedModelId(),
       }
       : isVerify
-        ? {target_path: els.targetPath.value.trim()}
+        ? {
+          target_path: els.targetPath.value.trim(),
+          openrouter_model: selectedModelId(),
+        }
         : requestBody();
     const payload = await postJson(url, body);
     setResult(payload);

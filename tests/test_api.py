@@ -186,8 +186,9 @@ def test_new_project_setup_returns_validation_prompt_without_score(tmp_path):
     assert "Do not blindly accept" in payload["next_prompt"]
 
 
-def test_verify_returns_score_and_repair_prompt():
-    client = TestClient(create_app())
+def test_verify_returns_score_and_repair_prompt(tmp_path, monkeypatch):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    client = TestClient(create_app(config_store=ConfigStore(tmp_path / "config.json")))
 
     response = client.post("/api/verify", json={"target_path": str(FIXTURES / "bad_context")})
 
@@ -196,9 +197,12 @@ def test_verify_returns_score_and_repair_prompt():
     assert payload["mode"] == "verify_repair"
     assert payload["score"]["ready"] is False
     assert payload["repair_prompt"]
+    assert payload["repair_source"] == "local_fallback"
+    assert payload["repair_ai_review"] is None
 
 
-def test_verify_returns_repair_prompt_for_uncompiled_template_context(tmp_path):
+def test_verify_returns_repair_prompt_for_uncompiled_template_context(tmp_path, monkeypatch):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     target = tmp_path / "repo"
     _copy_fixture(FIXTURES / "node_repo", target)
     client = TestClient(create_app(config_store=ConfigStore(tmp_path / "config.json")))
@@ -220,7 +224,85 @@ def test_verify_returns_repair_prompt_for_uncompiled_template_context(tmp_path):
     assert "AGENT_FILL" in payload["repair_prompt"]
 
 
-def test_prompt_upgrade_endpoint_returns_single_prompt_and_score(tmp_path):
+def test_verify_uses_openrouter_for_ai_assisted_repair_prompt(tmp_path, monkeypatch):
+    target = tmp_path / "repo"
+    _copy_fixture(FIXTURES / "node_repo", target)
+    store = ConfigStore(tmp_path / "config.json")
+    store.save(AppConfig(openrouter_api_key="secret", last_model="google/gemini-3.5-flash"))
+    client = TestClient(create_app(config_store=store))
+    calls = []
+
+    async def fake_complete_json(self, model, prompt, **kwargs):
+        calls.append({"model": model, "prompt": prompt, "kwargs": kwargs})
+        return {
+            "repair_prompt": "AI repair prompt: compile only docs/ai and AGENTS.md from verified evidence. Do not edit product code.",
+            "quality_analysis": {
+                "summary": "AI prioritized context repair from scan and score.",
+                "score": 95,
+                "risks": ["Live services are not verified by this prompt."],
+            },
+        }
+
+    monkeypatch.setattr("agent_primer.openrouter.OpenRouterClient.complete_json", fake_complete_json)
+
+    setup_response = client.post("/api/setup/apply", json={
+        "mode": "existing_project",
+        "target_path": str(target),
+        "openrouter_model": "google/gemini-3.5-flash",
+        "overwrite": False,
+    })
+    assert setup_response.status_code == 200
+
+    response = client.post("/api/verify", json={
+        "target_path": str(target),
+        "openrouter_model": "google/gemini-3.5-flash",
+    })
+
+    payload = response.json()
+    assert response.status_code == 200
+    assert payload["repair_source"] == "ai"
+    assert payload["repair_prompt"].startswith("AI repair prompt")
+    assert payload["repair_ai_review"]["summary"] == "AI prioritized context repair from scan and score."
+    assert calls[0]["model"] == "google/gemini-3.5-flash"
+    assert "Do not compile or edit the context files yourself" in calls[0]["prompt"]
+    assert "Local deterministic repair prompt" in calls[0]["prompt"]
+
+
+def test_verify_falls_back_to_local_repair_prompt_when_openrouter_fails(tmp_path, monkeypatch):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    target = tmp_path / "repo"
+    _copy_fixture(FIXTURES / "node_repo", target)
+    store = ConfigStore(tmp_path / "config.json")
+    store.save(AppConfig(openrouter_api_key="secret", last_model="google/gemini-3.5-flash"))
+    client = TestClient(create_app(config_store=store))
+
+    async def fail_complete_json(*args, **kwargs):
+        raise RuntimeError("OpenRouter unavailable")
+
+    monkeypatch.setattr("agent_primer.openrouter.OpenRouterClient.complete_json", fail_complete_json)
+
+    setup_response = client.post("/api/setup/apply", json={
+        "mode": "existing_project",
+        "target_path": str(target),
+        "openrouter_model": "google/gemini-3.5-flash",
+        "overwrite": False,
+    })
+    assert setup_response.status_code == 200
+
+    response = client.post("/api/verify", json={
+        "target_path": str(target),
+        "openrouter_model": "google/gemini-3.5-flash",
+    })
+
+    payload = response.json()
+    assert response.status_code == 200
+    assert payload["repair_source"] == "local_fallback"
+    assert "AGENT_FILL" in payload["repair_prompt"]
+    assert payload["repair_ai_review"] is None
+
+
+def test_prompt_upgrade_endpoint_returns_single_prompt_and_score(tmp_path, monkeypatch):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     client = TestClient(create_app(config_store=ConfigStore(tmp_path / "config.json")))
 
     response = client.post("/api/prompt/upgrade", json={
@@ -274,6 +356,7 @@ def test_prompt_upgrade_endpoint_uses_openrouter_when_key_is_configured(tmp_path
 
 
 def test_prompt_upgrade_endpoint_falls_back_locally_without_openrouter_key(tmp_path, monkeypatch):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     client = TestClient(create_app(config_store=ConfigStore(tmp_path / "config.json")))
 
     async def fail_if_called(*args, **kwargs):
@@ -294,7 +377,8 @@ def test_prompt_upgrade_endpoint_falls_back_locally_without_openrouter_key(tmp_p
     assert payload["ai_review"] is None
 
 
-def test_prompt_revision_requires_openrouter_key(tmp_path):
+def test_prompt_revision_requires_openrouter_key(tmp_path, monkeypatch):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     client = TestClient(create_app(config_store=ConfigStore(tmp_path / "config.json")))
 
     response = client.post("/api/prompt/revise", json={

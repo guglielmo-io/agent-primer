@@ -13,9 +13,10 @@ from pydantic import BaseModel
 from agent_primer.config import AppConfig, ConfigStore
 from agent_primer.context_pack import build_context_pack, build_existing_template_pack
 from agent_primer.model_presets import DEFAULT_MODEL, model_presets, model_request_options
-from agent_primer.models import AiContextDraft, ContextPack, RepoScan, SetupMode, SetupRequest
+from agent_primer.models import AiContextDraft, ContextPack, RepoScan, ScoreBreakdown, SetupMode, SetupRequest
 from agent_primer.openrouter import OpenRouterClient
 from agent_primer.prompt_compiler import (
+    build_ai_repair_prompt_request,
     compile_existing_fill_prompt,
     compile_new_project_validation_prompt,
     compile_repair_prompt,
@@ -35,6 +36,11 @@ from agent_primer.writer import plan_writes, write_context_pack
 
 class ScanRequest(BaseModel):
     target_path: Path
+
+
+class VerifyRequest(ScanRequest):
+    openrouter_model: str | None = None
+    openrouter_api_key: str | None = None
 
 
 class ConfigRequest(BaseModel):
@@ -169,13 +175,16 @@ def create_app(config_store: ConfigStore | None = None) -> FastAPI:
         }
 
     @app.post("/api/verify")
-    def verify(request: ScanRequest) -> dict[str, object]:
+    async def verify(request: VerifyRequest) -> dict[str, object]:
         score = score_existing_context(request.target_path)
+        repair_prompt, repair_source, repair_ai_review = await _repair_context_prompt(request, score, store)
         return {
             "mode": SetupMode.VERIFY_REPAIR.value,
             "message": "Context verification completed.",
             "score": score.model_dump(),
-            "repair_prompt": compile_repair_prompt(str(request.target_path), score) if not score.ready or score.findings else None,
+            "repair_prompt": repair_prompt,
+            "repair_source": repair_source,
+            "repair_ai_review": repair_ai_review,
         }
 
     @app.post("/api/prompt/upgrade")
@@ -294,6 +303,30 @@ async def _upgrade_prompt(request: PromptUpgradeRequest, store: ConfigStore) -> 
         "source": "ai",
         "ai_review": data.get("quality_analysis"),
     })
+
+
+async def _repair_context_prompt(
+    request: VerifyRequest,
+    score: ScoreBreakdown,
+    store: ConfigStore,
+) -> tuple[str | None, str | None, dict[str, object] | None]:
+    if score.ready and not score.findings:
+        return None, None, None
+    local_prompt = compile_repair_prompt(str(request.target_path), score)
+    key = store.get_api_key(request.openrouter_api_key)
+    if not key:
+        return local_prompt, "local_fallback", None
+    model = request.openrouter_model or store.load().last_model or DEFAULT_MODEL
+    scan = scan_repo(request.target_path)
+    prompt = build_ai_repair_prompt_request(str(request.target_path), score, scan, local_prompt)
+    try:
+        data = await OpenRouterClient(key).complete_json(model, prompt, **model_request_options(model))
+    except Exception:
+        return local_prompt, "local_fallback", None
+    repair_prompt = str(data.get("repair_prompt", "")).strip()
+    if not repair_prompt:
+        return local_prompt, "local_fallback", None
+    return repair_prompt, "ai", data.get("quality_analysis")
 
 
 def _run_directory_picker(initial_path: str | None) -> Path | None:
