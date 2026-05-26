@@ -33,5 +33,7 @@ class ConfigStore:
         env_key = os.getenv("OPENROUTER_API_KEY")
         if env_key:
             return env_key
+        if request_key:
+            return request_key
         stored_key = self.load().openrouter_api_key
-        return stored_key or request_key
+        return stored_key

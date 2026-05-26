@@ -317,6 +317,7 @@ function syncMode() {
   const isNew = els.mode.value === "new_project";
   const isVerify = els.mode.value === "verify_repair";
   const isPromptUpgrade = els.mode.value === "prompt_upgrade";
+  clearStaleModeOutput();
   const hasPromptUpgradeResult = isPromptUpgrade
     && state.generatedPromptMode === "prompt_upgrade"
     && Boolean(state.generatedPrompt);
@@ -361,6 +362,19 @@ function syncMode() {
     return;
   }
   els.primaryActionButton.textContent = "Set Up Existing Repo";
+}
+
+function clearStaleModeOutput() {
+  if (!state.generatedPrompt || state.generatedPromptMode === els.mode.value) {
+    return;
+  }
+  state.generatedPrompt = "";
+  state.generatedPromptMode = "";
+  els.promptOutput.value = "";
+  els.revisionRequest.value = "";
+  els.revisionFields.hidden = true;
+  els.result.textContent = "";
+  els.scoreBox.textContent = "";
 }
 
 async function copy(text) {

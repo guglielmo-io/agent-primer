@@ -147,9 +147,8 @@ def create_app(config_store: ConfigStore | None = None) -> FastAPI:
 
     @app.post("/api/scan")
     def scan(request: ScanRequest) -> dict[str, object]:
-        if not request.target_path.exists():
-            raise HTTPException(status_code=404, detail="Target path not found")
-        return {"scan": scan_repo(request.target_path).model_dump()}
+        target = _existing_directory(request.target_path)
+        return {"scan": scan_repo(target).model_dump()}
 
     @app.post("/api/setup/dry-run")
     async def dry_run(request: SetupRequest) -> dict[str, object]:
@@ -176,7 +175,8 @@ def create_app(config_store: ConfigStore | None = None) -> FastAPI:
 
     @app.post("/api/verify")
     async def verify(request: VerifyRequest) -> dict[str, object]:
-        score = score_existing_context(request.target_path)
+        target = _existing_directory(request.target_path)
+        score = score_existing_context(target)
         repair_prompt, repair_source, repair_ai_review = await _repair_context_prompt(request, score, store)
         return {
             "mode": SetupMode.VERIFY_REPAIR.value,
@@ -245,6 +245,14 @@ def _resolve_directory(path: str | None) -> Path:
     return resolved
 
 
+def _existing_directory(path: Path) -> Path:
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Target path not found")
+    if not path.is_dir():
+        raise HTTPException(status_code=400, detail="Target path must be a directory")
+    return path
+
+
 async def _build_setup_pack(request: SetupRequest, store: ConfigStore) -> tuple[Path, RepoScan, ContextPack, str, str]:
     if request.mode == SetupMode.VERIFY_REPAIR:
         raise HTTPException(status_code=400, detail="Use /api/verify for context verification")
@@ -277,8 +285,12 @@ async def _draft_new_project_context(request: SetupRequest, scan_result: RepoSca
         return AiContextDraft.example(project_name=request.project_name or Path(scan_result.root_path).name)
     client = OpenRouterClient(key)
     prompt = new_project_planner_prompt(str(request.project_name), str(request.raw_idea))
-    data = await client.complete_json(request.openrouter_model, prompt, **model_request_options(request.openrouter_model))
-    return AiContextDraft(project_name=request.project_name or Path(scan_result.root_path).name, **data)
+    try:
+        data = await client.complete_json(request.openrouter_model, prompt, **model_request_options(request.openrouter_model))
+        data.pop("project_name", None)
+        return AiContextDraft(project_name=request.project_name or Path(scan_result.root_path).name, **data)
+    except Exception:
+        return AiContextDraft.example(project_name=request.project_name or Path(scan_result.root_path).name)
 
 
 async def _upgrade_prompt(request: PromptUpgradeRequest, store: ConfigStore) -> PromptUpgradeResult:

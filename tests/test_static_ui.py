@@ -45,3 +45,10 @@ def test_prompt_upgrade_mode_has_dedicated_fields_and_no_target_path():
     assert "ai_review: payload.ai_review || null" in app_js
     assert "repair_ai_review: payload.repair_ai_review || null" in app_js
     assert "repair_source: payload.repair_source || null" in app_js
+
+
+def test_mode_change_clears_stale_prompt_from_other_modes():
+    app_js = (ROOT / "web/app.js").read_text(encoding="utf-8")
+
+    assert "function clearStaleModeOutput()" in app_js
+    assert "clearStaleModeOutput();" in app_js

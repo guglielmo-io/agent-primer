@@ -151,10 +151,23 @@ def _freshness_score(pack: ContextPack, findings: list[Finding]) -> int:
                 recommended_action=f"Replace every `{marker}` section in {path} with verified repository evidence",
             ))
     joined = "\n".join(pack.files.values())
-    generic_markers = [marker for marker in FORBIDDEN_MARKERS if marker in joined]
+    generic_markers = _generic_markers(joined)
     for marker in generic_markers:
         findings.append(Finding(severity="P1", code="generic_marker", message=f"Generic marker found: {marker}", recommended_action="Replace generic text with repository evidence"))
     return 0 if generic_markers or has_template_markers else 5
+
+
+def _generic_markers(text: str) -> list[str]:
+    return [
+        marker
+        for marker in FORBIDDEN_MARKERS
+        if _generic_marker_present(text, marker)
+    ]
+
+
+def _generic_marker_present(text: str, marker: str) -> bool:
+    flags = 0 if marker in {"TODO", "TBD"} else re.IGNORECASE
+    return bool(re.search(rf"(?<![\w-]){re.escape(marker)}(?![\w-])", text, flags))
 
 
 def _apply_caps(total: int, pack: ContextPack, scan: RepoScan, findings: list[Finding]) -> int:

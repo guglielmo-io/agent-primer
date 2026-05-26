@@ -46,6 +46,19 @@ async def test_invalid_json_triggers_one_repair_retry():
 
 
 @pytest.mark.asyncio
+async def test_fenced_json_response_is_parsed_without_retry():
+    transport = MockTransport([
+        httpx.Response(200, json={"choices": [{"message": {"content": "```json\n{\"ok\": true}\n```"}}]}),
+    ])
+    client = OpenRouterClient("key", transport=transport)
+
+    result = await client.complete_json("model", "prompt")
+
+    assert result == {"ok": True}
+    assert transport.calls == 1
+
+
+@pytest.mark.asyncio
 async def test_reasoning_effort_is_sent_when_requested():
     transport = MockTransport([
         httpx.Response(200, json={"choices": [{"message": {"content": "{\"ok\": true}"}}]}),

@@ -6,6 +6,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from agent_primer.model_presets import DEFAULT_MODEL
+
 
 class SetupMode(StrEnum):
     NEW_PROJECT = "new_project"
@@ -18,7 +20,7 @@ class SetupRequest(BaseModel):
     target_path: Path
     project_name: str | None = None
     raw_idea: str | None = None
-    openrouter_model: str
+    openrouter_model: str = DEFAULT_MODEL
     overwrite: bool = False
     openrouter_api_key: str | None = None
 

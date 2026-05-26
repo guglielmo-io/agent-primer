@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 import httpx
@@ -30,11 +31,11 @@ class OpenRouterClient:
     ) -> dict[str, Any]:
         content = await self._complete(model, prompt, reasoning_effort=reasoning_effort, verbosity=verbosity)
         try:
-            return json.loads(content)
+            return _parse_json_content(content)
         except json.JSONDecodeError:
             repair_prompt = f"{prompt}\n\nReturn only valid JSON matching the requested schema. Do not add markdown."
             repaired = await self._complete(model, repair_prompt, reasoning_effort=reasoning_effort, verbosity=verbosity)
-            return json.loads(repaired)
+            return _parse_json_content(repaired)
 
     async def _complete(
         self,
@@ -69,3 +70,11 @@ class OpenRouterClient:
             timeout=self.timeout,
             transport=self.transport,
         )
+
+
+def _parse_json_content(content: str) -> dict[str, Any]:
+    text = content.strip()
+    fenced = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL | re.IGNORECASE)
+    if fenced:
+        text = fenced.group(1).strip()
+    return json.loads(text)

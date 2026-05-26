@@ -35,3 +35,12 @@ def test_existing_project_requires_existing_path(tmp_path: Path):
             target_path=missing_path,
             openrouter_model="google/gemini-3.5-flash",
         )
+
+
+def test_setup_request_model_defaults_when_no_api_model_is_needed(tmp_path: Path):
+    request = SetupRequest(
+        mode=SetupMode.EXISTING_PROJECT,
+        target_path=tmp_path,
+    )
+
+    assert request.openrouter_model == "google/gemini-3.5-flash"

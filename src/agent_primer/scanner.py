@@ -520,6 +520,14 @@ def _symbolic_areas(root: Path) -> list[SymbolicArea]:
         "CI Pipeline": [
             ".github/workflows/*.yml",
             ".github/workflows/*.yaml",
+            ".gitea/workflows/*.yml",
+            ".gitea/workflows/*.yaml",
+            ".gitlab-ci.yml",
+            ".gitlab-ci.yaml",
+            "woodpecker.yml",
+            "woodpecker.yaml",
+            ".woodpecker.yml",
+            ".woodpecker.yaml",
         ],
     }
     areas: list[SymbolicArea] = []
@@ -534,9 +542,13 @@ def _symbolic_matches(root: Path, patterns: list[str]) -> list[str]:
     matches: set[str] = set()
     for pattern in patterns:
         for path in root.glob(pattern):
-            if path.is_file() and not _is_ignored_path(path, root) and path.suffix != ".pyc":
+            if path.is_file() and (_is_explicit_hidden_pattern(pattern) or not _is_ignored_path(path, root)) and path.suffix != ".pyc":
                 matches.add(_relative_path(path, root))
     return sorted(matches)
+
+
+def _is_explicit_hidden_pattern(pattern: str) -> bool:
+    return pattern.startswith(".")
 
 
 def _is_ignored_path(path: Path, root: Path) -> bool:

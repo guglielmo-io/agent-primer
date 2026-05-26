@@ -133,3 +133,17 @@ def test_scan_collects_context_evidence_for_common_non_node_python_stacks(tmp_pa
     assert scan.commands["gradle:test"] == "gradle test"
     assert scan.commands["dotnet:test"] == "dotnet test"
     assert scan.commands["make:test"] == "make test"
+
+
+def test_scan_detects_non_github_ci_as_symbolic_pipeline(tmp_path: Path):
+    (tmp_path / ".gitlab-ci.yml").write_text("test:\n  script: pytest\n", encoding="utf-8")
+    (tmp_path / ".gitea" / "workflows").mkdir(parents=True)
+    (tmp_path / ".gitea" / "workflows" / "ci.yml").write_text("name: ci\n", encoding="utf-8")
+    (tmp_path / ".woodpecker.yml").write_text("steps: []\n", encoding="utf-8")
+
+    scan = scan_repo(tmp_path)
+    areas = {area.name: area.paths for area in scan.symbolic_areas}
+
+    assert ".gitlab-ci.yml" in areas["CI Pipeline"]
+    assert ".gitea/workflows/ci.yml" in areas["CI Pipeline"]
+    assert ".woodpecker.yml" in areas["CI Pipeline"]

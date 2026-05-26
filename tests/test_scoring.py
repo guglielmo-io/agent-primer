@@ -183,3 +183,33 @@ All commands run from the repository root. Not detected: package-manager scripts
     assert score.total >= 85
     assert score.ready is True
     assert not any(finding.code == "no_verification_commands" for finding in score.findings)
+
+
+def test_scoring_does_not_flag_generic_marker_inside_repo_specific_identifier():
+    scan = RepoScan(
+        root_path="/repo",
+        root_files=["README.md"],
+        top_level_dirs=["src", "tests"],
+        commands={"test": "pytest"},
+    )
+    pack = build_context_pack(scan, AiContextDraft.example(project_name="Example"))
+    pack.files["docs/ai/constraints.md"] += "\n- Keep TODO_DEFAULT_REMINDER_TIME as the documented env-style constant name.\n"
+
+    score = score_context_pack(pack, scan)
+
+    assert not any(finding.code == "generic_marker" for finding in score.findings)
+
+
+def test_scoring_does_not_flag_lowercase_todo_cli_argument_as_generic_marker():
+    scan = RepoScan(
+        root_path="/repo",
+        root_files=["README.md"],
+        top_level_dirs=["tools", "tests"],
+        commands={"test": "pytest"},
+    )
+    pack = build_context_pack(scan, AiContextDraft.example(project_name="Example"))
+    pack.files["docs/ai/verification.md"] += '\n- Smoke command: `tools/brain write-decision --type todo --text "take Zoloft"`.\n'
+
+    score = score_context_pack(pack, scan)
+
+    assert not any(finding.code == "generic_marker" for finding in score.findings)

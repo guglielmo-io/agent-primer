@@ -25,6 +25,14 @@ def test_env_key_overrides_config(tmp_path: Path, monkeypatch):
     assert store.get_api_key() == "env-key"
 
 
+def test_request_key_overrides_stored_config_when_env_is_absent(tmp_path: Path, monkeypatch):
+    store = ConfigStore(tmp_path / "config.json")
+    store.save(AppConfig(openrouter_api_key="stored", last_model="model"))
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+
+    assert store.get_api_key("request-key") == "request-key"
+
+
 def test_config_round_trip_preserves_recent_paths(tmp_path: Path):
     store = ConfigStore(tmp_path / "config.json")
     expected = AppConfig(

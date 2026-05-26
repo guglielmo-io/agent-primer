@@ -40,6 +40,17 @@ def test_filesystem_picker_rejects_files(tmp_path):
     assert response.status_code == 400
 
 
+def test_scan_rejects_file_target_path(tmp_path):
+    client = TestClient(create_app())
+    file_path = tmp_path / "file.txt"
+    file_path.write_text("not a directory", encoding="utf-8")
+
+    response = client.post("/api/scan", json={"target_path": str(file_path)})
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Target path must be a directory"
+
+
 def test_openrouter_settings_report_persisted_state_without_secret(tmp_path):
     store = ConfigStore(tmp_path / "config.json")
     store.save(AppConfig(openrouter_api_key="secret", last_model="google/gemini-3.5-flash"))
@@ -186,6 +197,67 @@ def test_new_project_setup_returns_validation_prompt_without_score(tmp_path):
     assert "Do not blindly accept" in payload["next_prompt"]
 
 
+def test_new_project_ai_draft_ignores_returned_project_name(tmp_path, monkeypatch):
+    store = ConfigStore(tmp_path / "config.json")
+    store.save(AppConfig(openrouter_api_key="secret", last_model="google/gemini-3.5-flash"))
+    client = TestClient(create_app(config_store=store))
+
+    async def fake_complete_json(*args, **kwargs):
+        return {
+            "project_name": "wrong-name",
+            "product_summary": "A generated developer tool.",
+            "detected_stack": ["Python"],
+            "architecture_notes": ["Keep modules small."],
+            "verification_commands": {"test": "pytest"},
+            "constraints": ["No secrets."],
+            "risks": ["External API failure."],
+            "repo_map": ["src", "tests"],
+            "readiness_findings": ["Needs agent verification."],
+            "recommended_prompt": "Compare 5 proposals before implementation.",
+        }
+
+    monkeypatch.setattr("agent_primer.openrouter.OpenRouterClient.complete_json", fake_complete_json)
+
+    response = client.post("/api/setup/apply", json={
+        "mode": "new_project",
+        "target_path": str(tmp_path),
+        "project_name": "new_app",
+        "raw_idea": "A focused developer tool.",
+        "openrouter_model": "google/gemini-3.5-flash",
+        "overwrite": False,
+    })
+
+    payload = response.json()
+    assert response.status_code == 200
+    assert payload["mode"] == "new_project"
+    assert (tmp_path / "new_app" / "docs/ai/product.md").exists()
+
+
+def test_new_project_falls_back_to_local_draft_when_openrouter_fails(tmp_path, monkeypatch):
+    store = ConfigStore(tmp_path / "config.json")
+    store.save(AppConfig(openrouter_api_key="secret", last_model="google/gemini-3.5-flash"))
+    client = TestClient(create_app(config_store=store))
+
+    async def fail_complete_json(*args, **kwargs):
+        raise RuntimeError("OpenRouter unavailable")
+
+    monkeypatch.setattr("agent_primer.openrouter.OpenRouterClient.complete_json", fail_complete_json)
+
+    response = client.post("/api/setup/apply", json={
+        "mode": "new_project",
+        "target_path": str(tmp_path),
+        "project_name": "new_app",
+        "raw_idea": "A focused developer tool.",
+        "openrouter_model": "google/gemini-3.5-flash",
+        "overwrite": False,
+    })
+
+    payload = response.json()
+    assert response.status_code == 200
+    assert "next_prompt" in payload
+    assert "Needs agent verification" in (tmp_path / "new_app" / "docs/ai/context.md").read_text(encoding="utf-8")
+
+
 def test_verify_returns_score_and_repair_prompt(tmp_path, monkeypatch):
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     client = TestClient(create_app(config_store=ConfigStore(tmp_path / "config.json")))
@@ -199,6 +271,15 @@ def test_verify_returns_score_and_repair_prompt(tmp_path, monkeypatch):
     assert payload["repair_prompt"]
     assert payload["repair_source"] == "local_fallback"
     assert payload["repair_ai_review"] is None
+
+
+def test_verify_rejects_missing_target_path(tmp_path):
+    client = TestClient(create_app(config_store=ConfigStore(tmp_path / "config.json")))
+
+    response = client.post("/api/verify", json={"target_path": str(tmp_path / "missing")})
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Target path not found"
 
 
 def test_verify_returns_repair_prompt_for_uncompiled_template_context(tmp_path, monkeypatch):
