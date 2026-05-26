@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from agent_primer.config import AppConfig, ConfigStore
 from agent_primer.context_pack import build_context_pack, build_existing_template_pack
-from agent_primer.model_presets import model_presets, model_request_options
+from agent_primer.model_presets import DEFAULT_MODEL, model_presets, model_request_options
 from agent_primer.models import AiContextDraft, ContextPack, RepoScan, SetupMode, SetupRequest
 from agent_primer.openrouter import OpenRouterClient
 from agent_primer.prompt_compiler import (
@@ -22,6 +22,8 @@ from agent_primer.prompt_compiler import (
 )
 from agent_primer.prompts import new_project_planner_prompt
 from agent_primer.prompt_upgrade import (
+    PromptUpgradeResult,
+    build_ai_prompt_upgrade_request,
     build_prompt_revision_request,
     score_prompt,
     upgrade_prompt,
@@ -46,6 +48,8 @@ class PickDirectoryRequest(BaseModel):
 
 class PromptUpgradeRequest(BaseModel):
     raw_prompt: str
+    openrouter_model: str | None = None
+    openrouter_api_key: str | None = None
 
 
 class PromptRevisionRequest(BaseModel):
@@ -175,15 +179,17 @@ def create_app(config_store: ConfigStore | None = None) -> FastAPI:
         }
 
     @app.post("/api/prompt/upgrade")
-    def prompt_upgrade(request: PromptUpgradeRequest) -> dict[str, object]:
+    async def prompt_upgrade_endpoint(request: PromptUpgradeRequest) -> dict[str, object]:
         if not request.raw_prompt.strip():
             raise HTTPException(status_code=400, detail="Raw prompt is required")
-        result = upgrade_prompt(request.raw_prompt)
+        result = await _upgrade_prompt(request, store)
         return {
             "mode": "prompt_upgrade",
             "message": result.message,
+            "source": result.source,
             "upgraded_prompt": result.upgraded_prompt,
             "score": result.score.model_dump(),
+            "ai_review": result.ai_review,
         }
 
     @app.post("/api/prompt/revise")
@@ -264,6 +270,30 @@ async def _draft_new_project_context(request: SetupRequest, scan_result: RepoSca
     prompt = new_project_planner_prompt(str(request.project_name), str(request.raw_idea))
     data = await client.complete_json(request.openrouter_model, prompt, **model_request_options(request.openrouter_model))
     return AiContextDraft(project_name=request.project_name or Path(scan_result.root_path).name, **data)
+
+
+async def _upgrade_prompt(request: PromptUpgradeRequest, store: ConfigStore) -> PromptUpgradeResult:
+    local_result = upgrade_prompt(request.raw_prompt)
+    key = store.get_api_key(request.openrouter_api_key)
+    if not key:
+        return local_result
+    model = request.openrouter_model or store.load().last_model or DEFAULT_MODEL
+    prompt = build_ai_prompt_upgrade_request(request.raw_prompt, local_result.upgraded_prompt)
+    try:
+        data = await OpenRouterClient(key).complete_json(model, prompt, **model_request_options(model))
+    except Exception:
+        return local_result
+    upgraded_prompt = str(data.get("upgraded_prompt", "")).strip()
+    if not upgraded_prompt:
+        return local_result
+    prompt_score = score_prompt(upgraded_prompt)
+    return local_result.model_copy(update={
+        "message": "Prompt upgraded with AI.",
+        "upgraded_prompt": upgraded_prompt,
+        "score": prompt_score,
+        "source": "ai",
+        "ai_review": data.get("quality_analysis"),
+    })
 
 
 def _run_directory_picker(initial_path: str | None) -> Path | None:

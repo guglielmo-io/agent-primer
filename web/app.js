@@ -72,7 +72,12 @@ function setResult(payload) {
     els.revisionFields.hidden = !state.generatedPrompt;
     const score = payload.score?.total;
     els.scoreBox.textContent = Number.isInteger(score) ? `${score}/100` : "No score";
-    els.result.textContent = JSON.stringify({message: payload.message, score: payload.score}, null, 2);
+    els.result.textContent = JSON.stringify({
+      message: payload.message,
+      source: payload.source || null,
+      ai_review: payload.ai_review || null,
+      score: payload.score,
+    }, null, 2);
     setStatus(payload.score?.ready ? "Prompt ready" : "Prompt upgraded", payload.score?.ready ? "ready" : "error");
     return;
   }
@@ -260,7 +265,10 @@ async function runPrimaryAction() {
   els.result.textContent = isPromptUpgrade ? "Upgrading prompt..." : isVerify ? "Verifying context..." : "";
   try {
     const body = isPromptUpgrade
-      ? {raw_prompt: els.rawPrompt.value.trim()}
+      ? {
+        raw_prompt: els.rawPrompt.value.trim(),
+        openrouter_model: selectedModelId(),
+      }
       : isVerify
         ? {target_path: els.targetPath.value.trim()}
         : requestBody();

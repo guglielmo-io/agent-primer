@@ -100,7 +100,7 @@ Agent Primer reviews the context pack for real failure modes: uncompiled `AGENT_
 
 Use this when you have a rough prompt, idea, task, or messy requirement and want one final prompt that can be pasted into any capable AI assistant or coding agent.
 
-Agent Primer scores the prompt, infers the request type, then creates a single operational prompt for the target AI to execute. It does not force one universal template: software tasks get an implementation and verification workflow, decision prompts get recommendation criteria, writing prompts prioritize final copy, explanation prompts stay direct, and research/architecture prompts get source-backed investigation with scored alternatives when that is actually useful. The output is always one final prompt, not separate agent and optimized prompt variants.
+When an OpenRouter API key is configured, Agent Primer uses the selected model to generate the upgraded prompt and return an AI quality review. The AI prompt upgrader follows universal quality rules, but it must adapt the structure to the user's request instead of forcing one reusable template: software tasks get an implementation and verification workflow, decision prompts get recommendation criteria, writing prompts prioritize final copy, explanation prompts stay direct, and research/architecture prompts get source-backed investigation with scored alternatives when that is actually useful. If no API key is configured or the model call fails, Agent Primer falls back to the local intent-aware upgrader so the tool remains usable. The output is always one final prompt, not separate agent and optimized prompt variants.
 
 After the first upgrade, you can enter a **Revision request** such as "make it stricter for coding agents" or "make it more concise". That regeneration uses OpenRouter and returns a new single upgraded prompt with a refreshed Prompt score. The first deterministic upgrade works without an API key.
 
@@ -114,7 +114,7 @@ After the first upgrade, you can enter a **Revision request** such as "make it s
 - **Repo-map generation**: detects source areas, tests, CI, auth boundaries, API routes, database layers, and other symbolic areas.
 - **Readiness scoring**: checks completeness, specificity, verification quality, repo-map usefulness, uncompiled templates, stale commands, generated-directory noise, and generic markers.
 - **Repair prompts**: produces a focused repair protocol with concrete findings, evidence-gathering steps, acceptance criteria, and strict no-product-code rules.
-- **Intent-aware Prompt Upgrade**: turns plain text into one final enterprise-grade prompt with a task-specific structure, Prompt score, and optional OpenRouter-powered Revision request.
+- **AI-first Prompt Upgrade**: turns plain text into one final enterprise-grade prompt with a task-specific structure, Prompt score, AI quality review when OpenRouter is configured, and optional OpenRouter-powered Revision request.
 - **OpenRouter support**: optional model selection for new-project planning.
 - **No target-code changes**: context setup never edits product code.
 

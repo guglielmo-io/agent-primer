@@ -41,3 +41,5 @@ def test_prompt_upgrade_mode_has_dedicated_fields_and_no_target_path():
     assert 'els.rawPrompt.addEventListener("input", resetPromptUpgradeResult)' in app_js
     assert '"/api/prompt/upgrade"' in app_js
     assert '"/api/prompt/revise"' in app_js
+    assert "openrouter_model: selectedModelId()" in app_js
+    assert "ai_review: payload.ai_review || null" in app_js

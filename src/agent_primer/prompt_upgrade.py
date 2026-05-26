@@ -9,15 +9,62 @@ class PromptUpgradeResult(BaseModel):
     message: str
     upgraded_prompt: str
     score: ScoreBreakdown
+    source: str = "local_fallback"
+    ai_review: dict[str, object] | None = None
 
 
 def upgrade_prompt(raw_prompt: str) -> PromptUpgradeResult:
     upgraded = _deterministic_upgrade(raw_prompt)
     return PromptUpgradeResult(
-        message="Prompt upgraded.",
+        message="Prompt upgraded locally.",
         upgraded_prompt=upgraded,
         score=score_prompt(upgraded),
     )
+
+
+def build_ai_prompt_upgrade_request(raw_prompt: str, local_baseline: str) -> str:
+    return f"""You are a principal prompt architect, domain strategist, and execution-quality reviewer.
+
+Mission:
+Generate the strongest possible single prompt for the raw user request below. The prompt must be custom to the request intent, not a fixed reusable template.
+
+Raw user request:
+{_block(raw_prompt)}
+
+Local baseline prompt:
+{_block(local_baseline)}
+
+Universal prompt-quality rules:
+- Infer the real objective, audience, constraints, expected output, success criteria, and hidden risks.
+- Do not force one universal template.
+- Choose the structure that fits the request. Do not force proposals, matrices, long workflows, research, or scoring when they are not useful.
+- Use exactly 5 proposals only when the request is strategic, architectural, product-shaping, or materially benefits from comparing alternatives.
+- For software work, include repository inspection, minimal-change execution, tests, verification, and final evidence.
+- For writing work, prioritize final usable copy and tone control.
+- For explanations, prioritize directness, examples, and caveats without unnecessary framework.
+- For decisions, include criteria and alternatives only when they materially change the recommendation.
+- For requests involving current facts, tools, laws, prices, benchmarks, public repositories, or model capabilities, instruct the target AI to use current authoritative sources and separate evidence from inference.
+- Preserve the user's original intent and important wording. Do not invent missing facts.
+- Keep the final prompt compatible with any capable AI assistant or coding agent.
+- The final prompt should be as short as possible while still protecting quality.
+
+Quality analysis:
+- Analyze the absolute quality of your upgraded prompt before returning.
+- Check intent fit, specificity, constraints, output shape, ambiguity handling, verification/research needs, and risk control.
+- Revise the prompt internally if the analysis finds a weakness.
+
+Return JSON only with exactly these keys:
+{{
+  "upgraded_prompt": "one final prompt, no markdown wrapper outside this string",
+  "quality_analysis": {{
+    "summary": "one short quality verdict",
+    "score": 1,
+    "intent_type": "software|decision|writing|explanation|research|general",
+    "why_this_structure": "short reason",
+    "risks": ["remaining risk or uncertainty"]
+  }}
+}}
+"""
 
 
 def score_prompt(prompt: str) -> ScoreBreakdown:
