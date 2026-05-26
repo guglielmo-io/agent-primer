@@ -78,13 +78,6 @@
             Raw prompt
             <textarea id="rawPrompt" rows="9" placeholder="Paste any rough prompt, idea, task, instruction, or messy requirement."></textarea>
           </label>
-          <div id="revisionFields" hidden>
-            <label>
-              Revision request
-              <textarea id="revisionRequest" rows="4" placeholder="Example: make it stricter for coding agents, more concise, or stronger on verification."></textarea>
-            </label>
-            <button id="revisePromptButton" type="button" class="secondary-action">Regenerate with Request</button>
-          </div>
         </div>
 
         <label id="overwriteRow" class="check-row">
@@ -107,6 +100,13 @@
             <button id="copyPrompt" type="button" class="secondary-action">Copy</button>
           </div>
           <textarea id="promptOutput" readonly rows="14"></textarea>
+          <div id="revisionFields" hidden>
+            <label>
+              Edit request
+              <textarea id="revisionRequest" rows="4" placeholder="Example: make it stricter for coding agents, more concise, or stronger on verification."></textarea>
+            </label>
+            <button id="revisePromptButton" type="button" class="secondary-action">Edit with Request</button>
+          </div>
         </div>
       </section>
     </main>
