@@ -80,6 +80,20 @@ def test_repair_prompt_turns_low_category_scores_into_actions_without_findings()
     assert "score_gap_prompt_quality" in prompt
 
 
+def test_repair_prompt_contains_universal_evidence_sweep_for_any_stack():
+    score = ScoreBreakdown(total=74, ready=False, categories={"verification_quality": 8})
+
+    prompt = compile_repair_prompt("/repo", score)
+
+    assert "Universal evidence sweep" in prompt
+    assert "Cargo.toml" in prompt
+    assert "go.mod" in prompt
+    assert "build.gradle" in prompt
+    assert ".csproj" in prompt
+    assert "Makefile" in prompt
+    assert "If Agent Primer did not detect commands" in prompt
+
+
 def test_existing_fill_prompt_orders_agent_to_compile_templates_only():
     pack = ContextPack(files={"AGENTS.md": "# A", "docs/ai/context.md": "AGENT_FILL"})
 

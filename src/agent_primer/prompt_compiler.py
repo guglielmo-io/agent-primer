@@ -118,6 +118,15 @@ Review protocol:
 - Compare docs/ai/repo-map.md against the real source tree. Remove dependency/build outputs such as node_modules, dist, dist-server, coverage, and caches.
 - Keep the docs compact. Future coding agents pay for every token.
 
+Universal evidence sweep:
+- If Agent Primer did not detect commands, treat that as incomplete evidence, not proof that commands do not exist.
+- Check common manifests and lockfiles: package.json, pnpm-workspace.yaml, turbo.json, nx.json, pyproject.toml, requirements.txt, uv.lock, poetry.lock, Cargo.toml, go.mod, pom.xml, build.gradle, build.gradle.kts, *.csproj, *.sln, composer.json, Gemfile.
+- Check task runners and local automation: Makefile, justfile, Taskfile.yml, scripts/, bin/, tools/, docker-compose.yml, Dockerfile, entrypoint files, and README command sections.
+- Check CI definitions: .github/workflows, .gitlab-ci.yml, .gitea/workflows, Woodpecker files, deployment config, and any checked-in pipeline scripts.
+- Check nested project roots: apps/*, packages/*, services/*, api/*, web/*, backend/*, frontend/*, bot/*, workers/*, mcp-servers/*, crates/*, cmd/*, internal/*, pkg/*.
+- For unsupported or custom stacks, copy only commands that are explicitly evidenced by manifests, CI, docs, or scripts. Do not invent commands to satisfy the score.
+- If multiple command variants exist, prefer the command that works from the repository root, then document any required working directory or environment variable.
+
 Rules:
 - Do not modify application code.
 - Inspect code, tests, manifests, CI, README files, env examples, and runtime config.

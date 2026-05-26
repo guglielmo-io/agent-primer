@@ -110,3 +110,26 @@ def test_scan_ignores_generated_top_level_directories(tmp_path: Path):
     scan = scan_repo(tmp_path)
 
     assert scan.top_level_dirs == ["src"]
+
+
+def test_scan_collects_context_evidence_for_common_non_node_python_stacks(tmp_path: Path):
+    (tmp_path / "go.mod").write_text("module example.com/app\n", encoding="utf-8")
+    (tmp_path / "Cargo.toml").write_text("[package]\nname = \"app\"\n", encoding="utf-8")
+    (tmp_path / "build.gradle.kts").write_text("plugins { java }\n", encoding="utf-8")
+    (tmp_path / "App.csproj").write_text("<Project Sdk=\"Microsoft.NET.Sdk\" />\n", encoding="utf-8")
+    (tmp_path / "Makefile").write_text("test:\n\tgo test ./...\n", encoding="utf-8")
+    (tmp_path / ".gitlab-ci.yml").write_text("test:\n  script: go test ./...\n", encoding="utf-8")
+
+    scan = scan_repo(tmp_path)
+
+    assert "go.mod" in scan.manifest_files
+    assert "Cargo.toml" in scan.manifest_files
+    assert "build.gradle.kts" in scan.manifest_files
+    assert "App.csproj" in scan.manifest_files
+    assert "Makefile" in scan.manifest_files
+    assert ".gitlab-ci.yml" in scan.ci_files
+    assert scan.commands["go:test"] == "go test ./..."
+    assert scan.commands["rust:test"] == "cargo test"
+    assert scan.commands["gradle:test"] == "gradle test"
+    assert scan.commands["dotnet:test"] == "dotnet test"
+    assert scan.commands["make:test"] == "make test"

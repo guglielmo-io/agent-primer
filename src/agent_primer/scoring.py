@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from agent_primer.context_pack import REQUIRED_FILES
@@ -74,7 +75,9 @@ def _verification_score(pack: ContextPack, scan: RepoScan, findings: list[Findin
     if not text:
         findings.append(Finding(severity="P0", code="missing_verification_doc", message="Verification doc is missing", recommended_action="Create docs/ai/verification.md"))
         return 0
-    if not scan.commands and "Not detected" in text:
+    if not scan.commands:
+        if _manual_verification_commands_present(text):
+            return 18
         findings.append(Finding(severity="P1", code="no_verification_commands", message="No reliable verification commands detected", recommended_action="Inspect manifests and CI"))
         return 8
     verification_commands = _verification_commands(scan.commands)
@@ -159,7 +162,8 @@ def _apply_caps(total: int, pack: ContextPack, scan: RepoScan, findings: list[Fi
         total = min(total, 69)
     if "docs/ai/repo-map.md" not in pack.files:
         total = min(total, 79)
-    if not scan.commands:
+    verification_text = pack.files.get("docs/ai/verification.md", "")
+    if not scan.commands and not _manual_verification_commands_present(verification_text):
         total = min(total, 74)
     if any(finding.code == "uncompiled_template" for finding in findings):
         total = min(total, 64)
@@ -220,6 +224,16 @@ def _command_variants(command: str) -> set[str]:
             npm_args = " ".join(parts[3:])
             variants.add(f"cd {prefix} && npm {npm_args}")
     return variants
+
+
+def _manual_verification_commands_present(text: str) -> bool:
+    if "Not detected" in text:
+        return False
+    command_pattern = re.compile(
+        r"`[^`\n]*(?:test|check|lint|build|verify|pytest|unittest|cargo|go|dotnet|mvn|gradle|make|just|task)[^`\n]*`",
+        re.IGNORECASE,
+    )
+    return bool(command_pattern.search(text))
 
 
 def _stale_npm_command(command: str) -> str | None:

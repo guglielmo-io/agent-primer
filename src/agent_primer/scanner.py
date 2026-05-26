@@ -8,16 +8,44 @@ from agent_primer.models import RepoScan, SymbolicArea
 
 MANIFESTS = {
     "package.json",
+    "pnpm-workspace.yaml",
+    "pnpm-workspace.yml",
+    "turbo.json",
+    "nx.json",
     "pyproject.toml",
     "requirements.txt",
+    "uv.lock",
+    "poetry.lock",
+    "Pipfile",
+    "Pipfile.lock",
     "Cargo.toml",
+    "Cargo.lock",
     "go.mod",
+    "go.work",
     "pom.xml",
+    "mvnw",
+    "build.gradle",
+    "build.gradle.kts",
+    "settings.gradle",
+    "settings.gradle.kts",
+    "gradlew",
     "composer.json",
+    "composer.lock",
+    "Gemfile",
+    "Gemfile.lock",
+    "Makefile",
+    "makefile",
+    "justfile",
+    "Justfile",
+    "Taskfile.yml",
+    "Taskfile.yaml",
 }
+MANIFEST_SUFFIXES = {".csproj", ".fsproj", ".vbproj", ".sln"}
 IGNORED_TOP_LEVEL_DIRS = {
     ".git",
+    ".gradle",
     ".next",
+    ".turbo",
     ".venv",
     "__pycache__",
     "build",
@@ -47,19 +75,57 @@ def scan_repo(root: Path) -> RepoScan:
         language_hints.append("TypeScript" if _has_ts_files(root) else "JavaScript")
 
     for manifest in manifest_files:
+        manifest_path = root / manifest
+        manifest_name = manifest_path.name
+        prefix = manifest.rsplit("/", 1)[0] if "/" in manifest else None
         if manifest == "package.json":
             continue
         if manifest.endswith("/package.json"):
-            prefix = manifest.removesuffix("/package.json")
-            manifest_path = root / manifest
             nested_package_manager = _detect_package_manager(manifest_path.parent) or "npm"
             commands.update(_package_commands(manifest_path, nested_package_manager, prefix=prefix))
             language_hints.append("TypeScript" if _has_ts_files(manifest_path.parent) else "JavaScript")
             continue
-        if manifest.endswith("/requirements.txt") or manifest.endswith("/pyproject.toml"):
-            prefix = manifest.rsplit("/", 1)[0]
+        if prefix and manifest_name in {"requirements.txt", "pyproject.toml"}:
             commands.update(_python_commands(root / prefix, project_root=root, prefix=prefix))
             language_hints.append("Python")
+            continue
+        if manifest_name in {"go.mod", "go.work"}:
+            commands.update(_go_commands(prefix))
+            language_hints.append("Go")
+            continue
+        if manifest_name == "Cargo.toml":
+            commands.update(_rust_commands(prefix))
+            language_hints.append("Rust")
+            continue
+        if manifest_name == "pom.xml":
+            commands.update(_maven_commands(root / (prefix or "."), prefix))
+            language_hints.append("Java")
+            continue
+        if manifest_name in {"build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"}:
+            commands.update(_gradle_commands(root / (prefix or "."), prefix))
+            language_hints.append("Java")
+            continue
+        if manifest_name.endswith((".csproj", ".fsproj", ".vbproj", ".sln")):
+            commands.update(_dotnet_commands(prefix))
+            language_hints.append(".NET")
+            continue
+        if manifest_name == "composer.json":
+            commands.update(_composer_commands(manifest_path, prefix))
+            language_hints.append("PHP")
+            continue
+        if manifest_name == "Gemfile":
+            commands.update(_ruby_commands(root / (prefix or "."), prefix))
+            language_hints.append("Ruby")
+            continue
+        if manifest_name in {"Makefile", "makefile"}:
+            commands.update(_make_commands(manifest_path, prefix))
+            continue
+        if manifest_name in {"justfile", "Justfile"}:
+            commands.update(_just_commands(manifest_path, prefix))
+            continue
+        if manifest_name in {"Taskfile.yml", "Taskfile.yaml"}:
+            commands.update(_taskfile_commands(manifest_path, prefix))
+            continue
 
     if "pyproject.toml" in root_files or "requirements.txt" in root_files:
         commands.update(_python_commands(root))
@@ -99,7 +165,31 @@ def _top_level_dirs(root: Path) -> list[str]:
 
 
 def _source_dirs(root: Path, top_level_dirs: list[str]) -> list[str]:
-    source_dirs = {name for name in top_level_dirs if name in {"src", "app", "lib", "packages"}}
+    source_dirs = {
+        name
+        for name in top_level_dirs
+        if name
+        in {
+            "api",
+            "app",
+            "backend",
+            "client",
+            "cmd",
+            "crates",
+            "frontend",
+            "internal",
+            "lib",
+            "packages",
+            "pkg",
+            "server",
+            "service",
+            "services",
+            "src",
+            "web",
+            "worker",
+            "workers",
+        }
+    }
     for directory in top_level_dirs:
         if directory in {"test", "tests", "__tests__", "docs"}:
             continue
@@ -109,9 +199,9 @@ def _source_dirs(root: Path, top_level_dirs: list[str]) -> list[str]:
 
 
 def _manifest_files(root: Path, root_files: list[str], top_level_dirs: list[str]) -> list[str]:
-    manifests = {name for name in root_files if name in MANIFESTS}
+    manifests = {name for name in root_files if _is_manifest_file(root / name)}
     for path in root.rglob("*"):
-        if not path.is_file() or path.name not in MANIFESTS or _is_ignored_path(path, root):
+        if not path.is_file() or not _is_manifest_file(path) or _is_ignored_path(path, root):
             continue
         manifests.add(_relative_path(path, root))
     for directory in top_level_dirs:
@@ -126,10 +216,25 @@ def _matching(root: Path, names: list[str]) -> list[str]:
 
 
 def _ci_files(root: Path) -> list[str]:
+    matches = [
+        path
+        for path in [
+            root / ".gitlab-ci.yml",
+            root / ".gitlab-ci.yaml",
+            root / "woodpecker.yml",
+            root / "woodpecker.yaml",
+            root / ".woodpecker.yml",
+            root / ".woodpecker.yaml",
+        ]
+        if path.exists()
+    ]
     workflow_dir = root / ".github" / "workflows"
-    if not workflow_dir.exists():
-        return []
-    return sorted(_relative_path(path, root) for path in workflow_dir.glob("*.y*ml"))
+    if workflow_dir.exists():
+        matches.extend(workflow_dir.glob("*.y*ml"))
+    gitea_workflow_dir = root / ".gitea" / "workflows"
+    if gitea_workflow_dir.exists():
+        matches.extend(gitea_workflow_dir.glob("*.y*ml"))
+    return sorted(_relative_path(path, root) for path in matches)
 
 
 def _env_examples(root: Path) -> list[str]:
@@ -167,6 +272,10 @@ def _critical_files(root: Path) -> list[str]:
     found = [path for path in candidates if (root / path).exists()]
     manifest_files = _manifest_files(root, _root_files(root), _top_level_dirs(root))
     return sorted(dict.fromkeys(found + manifest_files + _ci_files(root) + _env_examples(root)))
+
+
+def _is_manifest_file(path: Path) -> bool:
+    return path.name in MANIFESTS or path.suffix in MANIFEST_SUFFIXES
 
 
 def _detect_package_manager(root: Path) -> str | None:
@@ -226,6 +335,137 @@ def _python_commands(root: Path, project_root: Path | None = None, prefix: str |
     if "[build-system]" in text:
         commands[f"{command_prefix}build"] = f"cd {prefix} && python -m build" if prefix else "python -m build"
     return commands
+
+
+def _go_commands(prefix: str | None = None) -> dict[str, str]:
+    return {
+        _stack_key("go", "test", prefix): _scope_shell("go test ./...", prefix),
+        _stack_key("go", "vet", prefix): _scope_shell("go vet ./...", prefix),
+    }
+
+
+def _rust_commands(prefix: str | None = None) -> dict[str, str]:
+    return {
+        _stack_key("rust", "test", prefix): _scope_shell("cargo test", prefix),
+        _stack_key("rust", "build", prefix): _scope_shell("cargo build", prefix),
+    }
+
+
+def _maven_commands(root: Path, prefix: str | None = None) -> dict[str, str]:
+    maven = "./mvnw" if (root / "mvnw").exists() else "mvn"
+    return {
+        _stack_key("maven", "test", prefix): _scope_shell(f"{maven} test", prefix),
+        _stack_key("maven", "package", prefix): _scope_shell(f"{maven} package", prefix),
+    }
+
+
+def _gradle_commands(root: Path, prefix: str | None = None) -> dict[str, str]:
+    gradle = "./gradlew" if (root / "gradlew").exists() else "gradle"
+    return {
+        _stack_key("gradle", "test", prefix): _scope_shell(f"{gradle} test", prefix),
+        _stack_key("gradle", "build", prefix): _scope_shell(f"{gradle} build", prefix),
+    }
+
+
+def _dotnet_commands(prefix: str | None = None) -> dict[str, str]:
+    return {
+        _stack_key("dotnet", "test", prefix): _scope_shell("dotnet test", prefix),
+        _stack_key("dotnet", "build", prefix): _scope_shell("dotnet build", prefix),
+    }
+
+
+def _composer_commands(composer_json: Path, prefix: str | None = None) -> dict[str, str]:
+    commands = {_stack_key("composer", "install", prefix): _scope_shell("composer install", prefix)}
+    try:
+        scripts = json.loads(composer_json.read_text(encoding="utf-8")).get("scripts", {})
+    except json.JSONDecodeError:
+        scripts = {}
+    for script in ("test", "lint", "analyse", "analyze"):
+        if script in scripts:
+            commands[_stack_key("composer", script, prefix)] = _scope_shell(f"composer {script}", prefix)
+    return commands
+
+
+def _ruby_commands(root: Path, prefix: str | None = None) -> dict[str, str]:
+    commands = {_stack_key("bundle", "install", prefix): _scope_shell("bundle install", prefix)}
+    if (root / "spec").exists():
+        commands[_stack_key("ruby", "test", prefix)] = _scope_shell("bundle exec rspec", prefix)
+    elif (root / "test").exists():
+        commands[_stack_key("ruby", "test", prefix)] = _scope_shell("bundle exec rake test", prefix)
+    return commands
+
+
+def _make_commands(makefile: Path, prefix: str | None = None) -> dict[str, str]:
+    return {
+        _stack_key("make", target, prefix): _scope_shell(f"make {target}", prefix)
+        for target in _targets_from_makefile(makefile)
+        if target in {"test", "lint", "check", "build"}
+    }
+
+
+def _just_commands(justfile: Path, prefix: str | None = None) -> dict[str, str]:
+    return {
+        _stack_key("just", target, prefix): _scope_shell(f"just {target}", prefix)
+        for target in _targets_from_recipe_file(justfile)
+        if target in {"test", "lint", "check", "build"}
+    }
+
+
+def _taskfile_commands(taskfile: Path, prefix: str | None = None) -> dict[str, str]:
+    return {
+        _stack_key("task", target, prefix): _scope_shell(f"task {target}", prefix)
+        for target in _targets_from_taskfile(taskfile)
+        if target in {"test", "lint", "check", "build"}
+    }
+
+
+def _targets_from_makefile(makefile: Path) -> set[str]:
+    targets: set[str] = set()
+    for line in makefile.read_text(encoding="utf-8", errors="ignore").splitlines():
+        if line.startswith(("\t", ".", "#")):
+            continue
+        if ":" not in line:
+            continue
+        target = line.split(":", 1)[0].strip()
+        if target.replace("-", "").replace("_", "").isalnum():
+            targets.add(target)
+    return targets
+
+
+def _targets_from_recipe_file(recipe_file: Path) -> set[str]:
+    targets: set[str] = set()
+    for line in recipe_file.read_text(encoding="utf-8", errors="ignore").splitlines():
+        if not line or line.startswith((" ", "\t", "#")) or ":" not in line:
+            continue
+        target = line.split(":", 1)[0].strip()
+        if target.replace("-", "").replace("_", "").isalnum():
+            targets.add(target)
+    return targets
+
+
+def _targets_from_taskfile(taskfile: Path) -> set[str]:
+    targets: set[str] = set()
+    in_tasks = False
+    for line in taskfile.read_text(encoding="utf-8", errors="ignore").splitlines():
+        if line.strip() == "tasks:":
+            in_tasks = True
+            continue
+        if not in_tasks:
+            continue
+        if line.startswith("  ") and not line.startswith("    ") and ":" in line:
+            target = line.split(":", 1)[0].strip()
+            if target.replace("-", "").replace("_", "").isalnum():
+                targets.add(target)
+    return targets
+
+
+def _stack_key(stack: str, action: str, prefix: str | None = None) -> str:
+    key = f"{stack}:{action}"
+    return f"{prefix}:{key}" if prefix else key
+
+
+def _scope_shell(command: str, prefix: str | None = None) -> str:
+    return f"cd {prefix} && {command}" if prefix else command
 
 
 def _has_ts_files(root: Path) -> bool:

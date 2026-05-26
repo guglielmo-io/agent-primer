@@ -122,3 +122,32 @@ def test_scoring_accepts_executable_command_variants_and_ignores_dev_scripts():
     assert score.ready is True
     assert score.total >= 85
     assert not score.findings
+
+
+def test_scoring_does_not_cap_unsupported_stack_when_verification_doc_has_manual_commands():
+    scan = RepoScan(
+        root_path="/repo",
+        root_files=["README.md"],
+        top_level_dirs=["custom-runtime", "tests"],
+        commands={},
+    )
+    pack = build_context_pack(scan, AiContextDraft.example(project_name="Example"))
+    pack.files["docs/ai/verification.md"] = """# Verification
+
+## Known Commands
+- Custom unit suite: `customctl test --all`
+- Custom static check: `customctl lint`
+
+## Verification Ladder
+- Run the custom unit suite for logic changes.
+- Run the custom static check before delivery.
+
+## Evidence
+- Commands verified from README.md and .ci/pipeline.yml.
+"""
+
+    score = score_context_pack(pack, scan)
+
+    assert score.total >= 85
+    assert score.ready is True
+    assert not any(finding.code == "no_verification_commands" for finding in score.findings)
