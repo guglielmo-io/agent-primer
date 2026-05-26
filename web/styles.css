@@ -178,7 +178,9 @@ button:hover {
   padding: 14px;
 }
 
-#newProjectFields {
+#newProjectFields,
+#promptUpgradeFields,
+#revisionFields {
   display: grid;
   gap: 12px;
 }

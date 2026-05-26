@@ -12,3 +12,13 @@ def test_readme_documents_agent_file_aliases_and_global_rule():
     assert "rename or copy" in readme
     assert "Global instruction" in readme
     assert "docs/ai/*.md" in readme
+
+
+def test_readme_documents_prompt_upgrade_mode():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    assert "Prompt Upgrade" in readme
+    assert "one final prompt" in readme
+    assert "Prompt score" in readme
+    assert "Revision request" in readme
+    assert "OpenRouter" in readme

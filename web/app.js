@@ -3,15 +3,22 @@ const CUSTOM_MODEL = "__custom__";
 
 const state = {
   generatedPrompt: "",
+  generatedPromptMode: "",
   apiKeyConfigured: false,
   modelPresets: [],
 };
 
 const els = {
   mode: document.querySelector("#mode"),
+  targetPathRow: document.querySelector("#targetPathRow"),
   targetPath: document.querySelector("#targetPath"),
   projectName: document.querySelector("#projectName"),
   rawIdea: document.querySelector("#rawIdea"),
+  rawPrompt: document.querySelector("#rawPrompt"),
+  promptUpgradeFields: document.querySelector("#promptUpgradeFields"),
+  revisionFields: document.querySelector("#revisionFields"),
+  revisionRequest: document.querySelector("#revisionRequest"),
+  revisePromptButton: document.querySelector("#revisePromptButton"),
   browseButton: document.querySelector("#browseButton"),
   settingsButton: document.querySelector("#settingsButton"),
   settingsPanel: document.querySelector("#settingsPanel"),
@@ -53,10 +60,27 @@ function setStatus(label, kind = "") {
 function setResult(payload) {
   const mode = payload.mode || els.mode.value;
   const isVerify = mode === "verify_repair";
+  const isPromptUpgrade = mode === "prompt_upgrade";
+  if (isPromptUpgrade) {
+    state.generatedPrompt = payload.upgraded_prompt || "";
+    state.generatedPromptMode = "prompt_upgrade";
+    els.resultTitle.textContent = "Prompt Score";
+    els.result.hidden = false;
+    els.scoreBox.hidden = false;
+    els.promptTitle.textContent = "Upgraded Prompt";
+    els.promptOutput.value = state.generatedPrompt;
+    els.revisionFields.hidden = !state.generatedPrompt;
+    const score = payload.score?.total;
+    els.scoreBox.textContent = Number.isInteger(score) ? `${score}/100` : "No score";
+    els.result.textContent = JSON.stringify({message: payload.message, score: payload.score}, null, 2);
+    setStatus(payload.score?.ready ? "Prompt ready" : "Prompt upgraded", payload.score?.ready ? "ready" : "error");
+    return;
+  }
   els.result.hidden = !isVerify;
   els.scoreBox.hidden = !isVerify;
   if (!isVerify) {
     state.generatedPrompt = payload.next_prompt || "";
+    state.generatedPromptMode = mode;
     els.resultTitle.textContent = "Next Agent Prompt";
     els.promptTitle.textContent = mode === "new_project" ? "Critical Validation Prompt" : "Context Fill Prompt";
     els.promptOutput.value = state.generatedPrompt;
@@ -69,6 +93,7 @@ function setResult(payload) {
   els.scoreBox.textContent = Number.isInteger(score) ? `${score}/100` : "No score";
   const useRepair = Boolean(payload.repair_prompt);
   state.generatedPrompt = useRepair ? payload.repair_prompt : "";
+  state.generatedPromptMode = mode;
   els.promptTitle.textContent = useRepair ? "Repair Prompt" : "No Repair Needed";
   els.promptOutput.value = state.generatedPrompt;
   if (!useRepair) {
@@ -224,14 +249,41 @@ async function openNativeFolderPicker() {
 
 async function runPrimaryAction() {
   const isVerify = els.mode.value === "verify_repair";
-  const url = isVerify ? "/api/verify" : "/api/setup/apply";
-  setStatus(isVerify ? "Verifying" : "Writing files");
-  els.result.hidden = !isVerify;
-  els.scoreBox.hidden = !isVerify;
-  els.result.textContent = isVerify ? "Verifying context..." : "";
+  const isPromptUpgrade = els.mode.value === "prompt_upgrade";
+  const url = isPromptUpgrade ? "/api/prompt/upgrade" : isVerify ? "/api/verify" : "/api/setup/apply";
+  setStatus(isPromptUpgrade ? "Upgrading prompt" : isVerify ? "Verifying" : "Writing files");
+  els.result.hidden = !(isVerify || isPromptUpgrade);
+  els.scoreBox.hidden = !(isVerify || isPromptUpgrade);
+  els.result.textContent = isPromptUpgrade ? "Upgrading prompt..." : isVerify ? "Verifying context..." : "";
   try {
-    const body = isVerify ? {target_path: els.targetPath.value.trim()} : requestBody();
+    const body = isPromptUpgrade
+      ? {raw_prompt: els.rawPrompt.value.trim()}
+      : isVerify
+        ? {target_path: els.targetPath.value.trim()}
+        : requestBody();
     const payload = await postJson(url, body);
+    setResult(payload);
+  } catch (error) {
+    setStatus("Failed", "error");
+    els.resultTitle.textContent = "Error";
+    els.result.hidden = false;
+    els.scoreBox.hidden = true;
+    els.result.textContent = error.message;
+  }
+}
+
+async function revisePrompt() {
+  setStatus("Regenerating prompt");
+  els.result.hidden = false;
+  els.scoreBox.hidden = false;
+  els.result.textContent = "Regenerating prompt with OpenRouter...";
+  try {
+    const payload = await postJson("/api/prompt/revise", {
+      raw_prompt: els.rawPrompt.value.trim(),
+      current_prompt: state.generatedPrompt,
+      revision_request: els.revisionRequest.value.trim(),
+      openrouter_model: selectedModelId(),
+    });
     setResult(payload);
   } catch (error) {
     setStatus("Failed", "error");
@@ -245,22 +297,42 @@ async function runPrimaryAction() {
 function syncMode() {
   const isNew = els.mode.value === "new_project";
   const isVerify = els.mode.value === "verify_repair";
+  const isPromptUpgrade = els.mode.value === "prompt_upgrade";
+  const hasPromptUpgradeResult = isPromptUpgrade
+    && state.generatedPromptMode === "prompt_upgrade"
+    && Boolean(state.generatedPrompt);
+  els.targetPathRow.hidden = isPromptUpgrade;
   els.newProjectFields.hidden = !isNew;
+  els.promptUpgradeFields.hidden = !isPromptUpgrade;
+  els.revisionFields.hidden = !hasPromptUpgradeResult;
   els.overwriteRow.hidden = !isNew;
   if (!isNew) {
     els.overwrite.checked = false;
   }
-  els.resultTitle.textContent = isVerify ? "Result" : "Next Agent Prompt";
-  els.result.hidden = !isVerify;
-  els.scoreBox.hidden = !isVerify;
-  els.promptTitle.textContent = isVerify
+  els.resultTitle.textContent = isPromptUpgrade ? "Prompt Score" : isVerify ? "Result" : "Next Agent Prompt";
+  els.result.hidden = isPromptUpgrade ? !hasPromptUpgradeResult : !isVerify;
+  els.scoreBox.hidden = isPromptUpgrade ? !hasPromptUpgradeResult : !isVerify;
+  els.promptTitle.textContent = isPromptUpgrade
+    ? "Upgraded Prompt"
+    : isVerify
     ? "Repair Prompt"
     : isNew
       ? "Critical Validation Prompt"
       : "Context Fill Prompt";
-  els.promptOutput.placeholder = isVerify
+  els.promptOutput.placeholder = isPromptUpgrade
+    ? "Run Prompt Upgrade to generate one final prompt."
+    : isVerify
     ? "Run verification to generate a repair prompt when issues are found."
     : "Run setup to generate the prompt to copy into your coding agent.";
+  if (isPromptUpgrade) {
+    els.primaryActionButton.textContent = "Upgrade Prompt";
+    if (!hasPromptUpgradeResult) {
+      els.result.textContent = "";
+      els.scoreBox.textContent = "";
+      els.promptOutput.value = "";
+    }
+    return;
+  }
   if (isNew) {
     els.primaryActionButton.textContent = "Create Project Context";
     return;
@@ -277,7 +349,23 @@ async function copy(text) {
   await navigator.clipboard.writeText(text);
 }
 
+function resetPromptUpgradeResult() {
+  if (els.mode.value !== "prompt_upgrade" || state.generatedPromptMode !== "prompt_upgrade") {
+    return;
+  }
+  state.generatedPrompt = "";
+  state.generatedPromptMode = "";
+  els.promptOutput.value = "";
+  els.revisionRequest.value = "";
+  els.revisionFields.hidden = true;
+  els.result.hidden = true;
+  els.scoreBox.hidden = true;
+  els.result.textContent = "";
+  els.scoreBox.textContent = "";
+}
+
 els.mode.addEventListener("change", syncMode);
+els.rawPrompt.addEventListener("input", resetPromptUpgradeResult);
 els.browseButton.addEventListener("click", openNativeFolderPicker);
 els.settingsButton.addEventListener("click", () => {
   els.settingsPanel.hidden = !els.settingsPanel.hidden;
@@ -287,6 +375,7 @@ els.closeSettingsButton.addEventListener("click", () => {
 });
 els.saveConfigButton.addEventListener("click", saveConfig);
 els.primaryActionButton.addEventListener("click", runPrimaryAction);
+els.revisePromptButton.addEventListener("click", revisePrompt);
 els.copyPrompt.addEventListener("click", () => copy(state.generatedPrompt));
 els.model.addEventListener("change", () => {
   syncCustomModel(true);

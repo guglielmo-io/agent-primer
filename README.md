@@ -96,6 +96,14 @@ Use this after context exists.
 
 Agent Primer reviews the context pack for real failure modes: uncompiled `AGENT_FILL` templates, stale npm command syntax, missing nested package commands, generated directories leaking into the repo map, missing symbolic areas, weak verification docs, and generic placeholders. When anything is wrong, it generates a repair prompt with concrete findings, review steps, acceptance criteria, and a final response format for your coding agent.
 
+### 4. Prompt Upgrade
+
+Use this when you have a rough prompt, idea, task, or messy requirement and want one final prompt that can be pasted into any capable AI assistant or coding agent.
+
+Agent Primer scores the prompt, then creates a single upgraded prompt that tells the target AI to infer the task type, resolve ambiguity, choose the best approach, use 5 candidate strategies when useful, compare them, and run an internal quality checklist before producing the final output. The output is always one final prompt, not separate agent and optimized prompt variants.
+
+After the first upgrade, you can enter a **Revision request** such as "make it stricter for coding agents" or "make it more concise". That regeneration uses OpenRouter and returns a new single upgraded prompt with a refreshed Prompt score. The first deterministic upgrade works without an API key.
+
 ## Key Features
 
 - **Local-first GUI**: runs on `127.0.0.1`; no hosted backend.
@@ -106,6 +114,7 @@ Agent Primer reviews the context pack for real failure modes: uncompiled `AGENT_
 - **Repo-map generation**: detects source areas, tests, CI, auth boundaries, API routes, database layers, and other symbolic areas.
 - **Readiness scoring**: checks completeness, specificity, verification quality, repo-map usefulness, uncompiled templates, stale commands, generated-directory noise, and generic markers.
 - **Repair prompts**: produces a focused repair protocol with concrete findings, evidence-gathering steps, acceptance criteria, and strict no-product-code rules.
+- **Prompt Upgrade**: turns plain text into one final enterprise-grade prompt with Prompt score and optional OpenRouter-powered Revision request.
 - **OpenRouter support**: optional model selection for new-project planning.
 - **No target-code changes**: context setup never edits product code.
 

@@ -49,10 +49,11 @@
             <option value="new_project">New Project Creation</option>
             <option value="existing_project">Existing Project Context Setup</option>
             <option value="verify_repair">Context Verification & Repair</option>
+            <option value="prompt_upgrade">Prompt Upgrade</option>
           </select>
         </label>
 
-        <label>
+        <label id="targetPathRow">
           Target path
           <div class="path-row">
             <input id="targetPath" placeholder="/absolute/path/to/parent-or-repo" />
@@ -70,6 +71,20 @@
             Raw idea
             <textarea id="rawIdea" rows="6" placeholder="Describe the product idea in plain language."></textarea>
           </label>
+        </div>
+
+        <div id="promptUpgradeFields" hidden>
+          <label>
+            Raw prompt
+            <textarea id="rawPrompt" rows="9" placeholder="Paste any rough prompt, idea, task, instruction, or messy requirement."></textarea>
+          </label>
+          <div id="revisionFields" hidden>
+            <label>
+              Revision request
+              <textarea id="revisionRequest" rows="4" placeholder="Example: make it stricter for coding agents, more concise, or stronger on verification."></textarea>
+            </label>
+            <button id="revisePromptButton" type="button" class="secondary-action">Regenerate with Request</button>
+          </div>
         </div>
 
         <label id="overwriteRow" class="check-row">
@@ -95,6 +110,6 @@
         </div>
       </section>
     </main>
-    <script src="/static/app.js?v=20260524-2155"></script>
+    <script src="/static/app.js?v=20260526-0015"></script>
   </body>
 </html>

@@ -220,6 +220,65 @@ def test_verify_returns_repair_prompt_for_uncompiled_template_context(tmp_path):
     assert "AGENT_FILL" in payload["repair_prompt"]
 
 
+def test_prompt_upgrade_endpoint_returns_single_prompt_and_score(tmp_path):
+    client = TestClient(create_app(config_store=ConfigStore(tmp_path / "config.json")))
+
+    response = client.post("/api/prompt/upgrade", json={
+        "raw_prompt": "Create a launch plan for an AI product.",
+    })
+
+    payload = response.json()
+    assert response.status_code == 200
+    assert payload["message"] == "Prompt upgraded."
+    assert payload["score"]["ready"] is True
+    assert "upgraded_prompt" in payload
+    assert "Quality checklist" in payload["upgraded_prompt"]
+    assert "agent_prompt" not in payload
+    assert "optimized_prompt" not in payload
+
+
+def test_prompt_revision_requires_openrouter_key(tmp_path):
+    client = TestClient(create_app(config_store=ConfigStore(tmp_path / "config.json")))
+
+    response = client.post("/api/prompt/revise", json={
+        "raw_prompt": "Create a launch plan.",
+        "current_prompt": "Current prompt",
+        "revision_request": "Make it more rigorous.",
+        "openrouter_model": "google/gemini-3.5-flash",
+    })
+
+    assert response.status_code == 400
+    assert "OpenRouter API key is missing" in response.json()["detail"]
+
+
+def test_prompt_revision_endpoint_uses_openrouter(tmp_path, monkeypatch):
+    store = ConfigStore(tmp_path / "config.json")
+    store.save(AppConfig(openrouter_api_key="secret", last_model="google/gemini-3.5-flash"))
+    client = TestClient(create_app(config_store=store))
+    calls = []
+
+    async def fake_complete_json(self, model, prompt, **kwargs):
+        calls.append({"model": model, "prompt": prompt, "kwargs": kwargs})
+        return {"upgraded_prompt": "Revised enterprise prompt with Quality checklist and Return one final answer."}
+
+    monkeypatch.setattr("agent_primer.openrouter.OpenRouterClient.complete_json", fake_complete_json)
+
+    response = client.post("/api/prompt/revise", json={
+        "raw_prompt": "Create a launch plan.",
+        "current_prompt": "Current prompt",
+        "revision_request": "Make it more rigorous.",
+        "openrouter_model": "google/gemini-3.5-flash",
+    })
+
+    payload = response.json()
+    assert response.status_code == 200
+    assert payload["message"] == "Prompt regenerated."
+    assert payload["upgraded_prompt"].startswith("Revised enterprise prompt")
+    assert isinstance(payload["score"]["total"], int)
+    assert calls[0]["model"] == "google/gemini-3.5-flash"
+    assert "Make it more rigorous." in calls[0]["prompt"]
+
+
 def _copy_fixture(source: Path, target: Path) -> None:
     for path in source.rglob("*"):
         if path.is_dir():

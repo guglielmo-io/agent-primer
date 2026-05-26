@@ -21,6 +21,11 @@ from agent_primer.prompt_compiler import (
     compile_repair_prompt,
 )
 from agent_primer.prompts import new_project_planner_prompt
+from agent_primer.prompt_upgrade import (
+    build_prompt_revision_request,
+    score_prompt,
+    upgrade_prompt,
+)
 from agent_primer.scanner import scan_repo
 from agent_primer.scoring import score_existing_context
 from agent_primer.writer import plan_writes, write_context_pack
@@ -37,6 +42,18 @@ class ConfigRequest(BaseModel):
 
 class PickDirectoryRequest(BaseModel):
     initial_path: str | None = None
+
+
+class PromptUpgradeRequest(BaseModel):
+    raw_prompt: str
+
+
+class PromptRevisionRequest(BaseModel):
+    raw_prompt: str
+    current_prompt: str
+    revision_request: str
+    openrouter_model: str
+    openrouter_api_key: str | None = None
 
 
 def create_app(config_store: ConfigStore | None = None) -> FastAPI:
@@ -155,6 +172,48 @@ def create_app(config_store: ConfigStore | None = None) -> FastAPI:
             "message": "Context verification completed.",
             "score": score.model_dump(),
             "repair_prompt": compile_repair_prompt(str(request.target_path), score) if not score.ready or score.findings else None,
+        }
+
+    @app.post("/api/prompt/upgrade")
+    def prompt_upgrade(request: PromptUpgradeRequest) -> dict[str, object]:
+        if not request.raw_prompt.strip():
+            raise HTTPException(status_code=400, detail="Raw prompt is required")
+        result = upgrade_prompt(request.raw_prompt)
+        return {
+            "mode": "prompt_upgrade",
+            "message": result.message,
+            "upgraded_prompt": result.upgraded_prompt,
+            "score": result.score.model_dump(),
+        }
+
+    @app.post("/api/prompt/revise")
+    async def prompt_revise(request: PromptRevisionRequest) -> dict[str, object]:
+        key = store.get_api_key(request.openrouter_api_key)
+        if not key:
+            raise HTTPException(status_code=400, detail="OpenRouter API key is missing")
+        if not request.raw_prompt.strip() or not request.current_prompt.strip() or not request.revision_request.strip():
+            raise HTTPException(status_code=400, detail="Raw prompt, current prompt, and revision request are required")
+        score = score_prompt(request.current_prompt)
+        prompt = build_prompt_revision_request(
+            raw_prompt=request.raw_prompt,
+            current_prompt=request.current_prompt,
+            revision_request=request.revision_request,
+            score=score,
+        )
+        data = await OpenRouterClient(key).complete_json(
+            request.openrouter_model,
+            prompt,
+            **model_request_options(request.openrouter_model),
+        )
+        upgraded_prompt = str(data.get("upgraded_prompt", "")).strip()
+        if not upgraded_prompt:
+            raise HTTPException(status_code=502, detail="OpenRouter returned an empty prompt")
+        prompt_score = score_prompt(upgraded_prompt)
+        return {
+            "mode": "prompt_upgrade",
+            "message": "Prompt regenerated.",
+            "upgraded_prompt": upgraded_prompt,
+            "score": prompt_score.model_dump(),
         }
 
     return app
