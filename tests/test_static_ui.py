@@ -51,3 +51,13 @@ def test_mode_change_clears_stale_prompt_from_other_modes():
 
     assert "function clearStaleModeOutput()" in app_js
     assert "clearStaleModeOutput();" in app_js
+
+
+def test_request_errors_are_rendered_readably_not_as_object():
+    # Regression: FastAPI 422 returns `detail` as a list of objects; the UI must
+    # not surface it as "[object Object]" in the result/status.
+    app_js = (ROOT / "web/app.js").read_text(encoding="utf-8")
+
+    assert "function describeError(payload)" in app_js
+    assert "throw new Error(describeError(payload))" in app_js
+    assert "Array.isArray(detail)" in app_js

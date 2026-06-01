@@ -26,6 +26,18 @@ def test_project_name_allows_safe_characters_only(tmp_path: Path):
         )
 
 
+def test_project_name_normalizes_spaces_to_hyphens(tmp_path: Path):
+    request = SetupRequest(
+        mode=SetupMode.NEW_PROJECT,
+        target_path=tmp_path,
+        project_name="My Cool   Project",
+        raw_idea="Build a useful tool.",
+        openrouter_model="google/gemini-3.5-flash",
+    )
+
+    assert request.project_name == "My-Cool-Project"
+
+
 def test_existing_project_requires_existing_path(tmp_path: Path):
     missing_path = tmp_path / "missing"
 

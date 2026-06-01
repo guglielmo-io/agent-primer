@@ -216,6 +216,49 @@ def test_new_project_setup_returns_validation_prompt_without_score(tmp_path):
     assert "Do not blindly accept" in payload["next_prompt"]
 
 
+def test_new_project_accepts_name_with_spaces(tmp_path):
+    client = TestClient(create_app(config_store=ConfigStore(tmp_path / "config.json")))
+
+    response = client.post(
+        "/api/setup/apply",
+        json={
+            "mode": "new_project",
+            "target_path": str(tmp_path),
+            "project_name": "My Project",
+            "raw_idea": "A focused developer tool.",
+            "openrouter_model": "google/gemini-3.5-flash",
+            "overwrite": False,
+        },
+    )
+
+    assert response.status_code == 200
+    # Spaces are normalized to hyphens so the project becomes one safe dir segment.
+    assert (tmp_path / "My-Project").is_dir()
+    assert "My-Project" in response.json()["next_prompt"]
+
+
+def test_new_project_rejects_path_separators_with_readable_detail(tmp_path):
+    client = TestClient(create_app(config_store=ConfigStore(tmp_path / "config.json")))
+
+    response = client.post(
+        "/api/setup/apply",
+        json={
+            "mode": "new_project",
+            "target_path": str(tmp_path),
+            "project_name": "../escape",
+            "raw_idea": "A focused developer tool.",
+            "openrouter_model": "google/gemini-3.5-flash",
+            "overwrite": False,
+        },
+    )
+
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    # The frontend renders this list into readable text; keep the shape stable.
+    assert isinstance(detail, list)
+    assert any("project_name" in item.get("loc", []) for item in detail)
+
+
 def test_new_project_ai_draft_ignores_returned_project_name(tmp_path, monkeypatch):
     store = ConfigStore(tmp_path / "config.json")
     store.save(AppConfig(openrouter_api_key="secret", last_model="google/gemini-3.5-flash"))

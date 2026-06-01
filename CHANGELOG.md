@@ -9,6 +9,7 @@ All notable changes to Agent Primer will be documented in this file.
 - Added deterministic dependency extraction from manifests (Python, Node, Go, Rust) into the context docs to reduce `AGENT_FILL` guesswork.
 - Added language-agnostic entry-point detection and broadened symbolic areas (routes, models/migrations, background jobs, auth) beyond the JavaScript ecosystem.
 - Hardened scanning against malformed manifests.
+- Fixed New Project failing with an unreadable "[object Object]" error: validation errors now render as readable text, and project names with spaces are normalized (e.g. `My Project` -> `My-Project`).
 - Added a `ruff` + `mypy --strict` quality gate and CI checks.
 
 ## 0.1.0 - 2026-05-22

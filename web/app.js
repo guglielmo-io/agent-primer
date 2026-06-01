@@ -122,6 +122,28 @@ function setResult(payload) {
   }
 }
 
+// FastAPI returns `detail` as a string for HTTPException but as an array of
+// {loc, msg} objects for 422 validation errors. Render both as readable text
+// so the UI never shows "[object Object]".
+function describeError(payload) {
+  const detail = payload && payload.detail;
+  if (typeof detail === "string") {
+    return detail;
+  }
+  if (Array.isArray(detail)) {
+    const messages = detail.map((item) => {
+      const field = Array.isArray(item.loc) ? item.loc[item.loc.length - 1] : null;
+      const msg = String(item.msg || "Invalid value").replace(/^Value error,\s*/, "");
+      return field && !msg.includes(field) ? `${field}: ${msg}` : msg;
+    });
+    return messages.join("; ") || "Request failed";
+  }
+  if (detail && typeof detail === "object") {
+    return JSON.stringify(detail);
+  }
+  return "Request failed";
+}
+
 async function postJson(url, body) {
   const response = await fetch(url, {
     method: "POST",
@@ -130,7 +152,7 @@ async function postJson(url, body) {
   });
   const payload = await response.json();
   if (!response.ok) {
-    throw new Error(payload.detail || "Request failed");
+    throw new Error(describeError(payload));
   }
   return payload;
 }
@@ -139,7 +161,7 @@ async function getJson(url) {
   const response = await fetch(url);
   const payload = await response.json();
   if (!response.ok) {
-    throw new Error(payload.detail || "Request failed");
+    throw new Error(describeError(payload));
   }
   return payload;
 }

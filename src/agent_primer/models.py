@@ -29,11 +29,17 @@ class SetupRequest(BaseModel):
     def validate_project_name(cls, value: str | None) -> str | None:
         if value is None:
             return value
-        if not re.fullmatch(r"[A-Za-z0-9_-]+", value):
+        # Natural input like "My Project" should just work: collapse internal
+        # whitespace to hyphens before validating. Path separators and other
+        # characters stay rejected so the name remains one safe directory segment.
+        normalized = re.sub(r"\s+", "-", value.strip())
+        if not normalized:
+            return None
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", normalized):
             raise ValueError(
-                "project_name may contain letters, numbers, hyphen, and underscore only"
+                "project_name may contain letters, numbers, spaces, hyphen, and underscore only"
             )
-        return value
+        return normalized
 
     @model_validator(mode="after")
     def validate_mode_requirements(self) -> SetupRequest:
