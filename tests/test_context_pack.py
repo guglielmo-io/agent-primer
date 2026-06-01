@@ -20,6 +20,17 @@ def test_context_pack_generates_required_files():
     }
 
 
+def test_example_draft_carries_raw_idea_into_product_summary():
+    draft = AiContextDraft.example(
+        project_name="Klarfoqs-IDE", product_idea="A local-first AI IDE."
+    )
+    scan = RepoScan(root_path="/repo")
+
+    pack = build_context_pack(scan, draft)
+
+    assert "A local-first AI IDE." in pack.files["docs/ai/product.md"]
+
+
 def test_context_pack_avoids_forbidden_markers():
     draft = AiContextDraft.example(project_name="Example")
     scan = RepoScan(root_path="/repo", top_level_dirs=["src"], root_files=["README.md"])

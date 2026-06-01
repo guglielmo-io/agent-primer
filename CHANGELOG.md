@@ -5,7 +5,8 @@ All notable changes to Agent Primer will be documented in this file.
 ## Unreleased
 
 - Rebuilt Prompt Upgrade on researched LLM/coding-agent prompting best practices: weighted intent routing, a coding-optimized template (bias to action, anti-patterns, `rg`/`path:line`, narrow-to-broad verification), and an upgraded AI rewrite prompt.
-- Surfaced OpenRouter failures instead of silently falling back: when a key is configured but the AI call fails, the prompt-upgrade and repair flows return a clear warning.
+- Surfaced OpenRouter failures instead of silently falling back: when a key is configured but the AI call fails, the prompt-upgrade, repair, and New Project flows return a clear warning.
+- New Project now preserves the original idea even when the AI draft is unavailable: the idea lands in `docs/ai/product.md` and is included verbatim in the validation prompt.
 - Added deterministic dependency extraction from manifests (Python, Node, Go, Rust) into the context docs to reduce `AGENT_FILL` guesswork.
 - Added language-agnostic entry-point detection and broadened symbolic areas (routes, models/migrations, background jobs, auth) beyond the JavaScript ecosystem.
 - Hardened scanning against malformed manifests.

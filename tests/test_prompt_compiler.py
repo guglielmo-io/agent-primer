@@ -127,3 +127,22 @@ def test_new_project_prompt_requires_five_scored_proposals():
     assert "technology choices" in prompt
     assert "why another proposal could be better" in prompt
     assert "Do not write application code" in prompt
+
+
+def test_new_project_prompt_includes_original_idea_verbatim():
+    pack = ContextPack(files={"AGENTS.md": "# A", "docs/ai/product.md": "# Product"})
+
+    prompt = compile_new_project_validation_prompt(
+        "/repo/new-app", pack, "A local-first AI IDE called Klarfoq."
+    )
+
+    assert "Original product idea" in prompt
+    assert "A local-first AI IDE called Klarfoq." in prompt
+
+
+def test_new_project_prompt_omits_idea_block_when_absent():
+    pack = ContextPack(files={"AGENTS.md": "# A"})
+
+    prompt = compile_new_project_validation_prompt("/repo/new-app", pack)
+
+    assert "Original product idea" not in prompt

@@ -3,11 +3,15 @@ from __future__ import annotations
 from agent_primer.models import ContextPack, RepoScan, ScoreBreakdown
 
 
-def compile_new_project_validation_prompt(repo_path: str, pack: ContextPack) -> str:
+def compile_new_project_validation_prompt(
+    repo_path: str, pack: ContextPack, product_idea: str = ""
+) -> str:
     files = _file_list(pack)
+    idea = product_idea.strip()
+    idea_block = f"\nOriginal product idea (from setup, verbatim):\n{idea}\n" if idea else ""
     return f"""You are operating inside this new software project:
 {repo_path}
-
+{idea_block}
 The generated context is a provisional product and architecture plan, not final truth. Your first job is to pressure-test it before any implementation work.
 
 Context files:

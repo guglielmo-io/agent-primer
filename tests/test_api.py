@@ -330,6 +330,13 @@ def test_new_project_falls_back_to_local_draft_when_openrouter_fails(tmp_path, m
     assert "Needs agent verification" in (tmp_path / "new_app" / "docs/ai/context.md").read_text(
         encoding="utf-8"
     )
+    # The AI draft failed but must not look like a clean success, and the idea must
+    # survive into the product doc via the local fallback draft.
+    assert payload["warning"]
+    assert "google/gemini-3.5-flash" in payload["warning"]
+    product = (tmp_path / "new_app" / "docs/ai/product.md").read_text(encoding="utf-8")
+    assert "A focused developer tool." in product
+    assert "A focused developer tool." in payload["next_prompt"]
 
 
 def test_verify_returns_score_and_repair_prompt(tmp_path, monkeypatch):

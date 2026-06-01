@@ -106,17 +106,34 @@ class AiContextDraft(BaseModel):
     recommended_prompt: str = ""
 
     @classmethod
-    def example(cls, project_name: str = "AI Ready Repository") -> AiContextDraft:
+    def example(
+        cls,
+        project_name: str = "AI Ready Repository",
+        product_idea: str | None = None,
+    ) -> AiContextDraft:
+        # Without an AI draft we still must carry the user's original idea into the
+        # context files; otherwise the new project ships with a generic placeholder
+        # summary and the idea is silently lost.
+        idea = (product_idea or "").strip()
+        summary = idea or (
+            "Repository context pack generated for AI-assisted software engineering."
+        )
+        readiness = (
+            "Provisional plan captured from the setup idea; verify and refine it against"
+            " current research before implementation."
+            if idea
+            else "Context pack generated and ready for repository-specific review."
+        )
         return cls(
             project_name=project_name,
-            product_summary="Repository context pack generated for AI-assisted software engineering.",
+            product_summary=summary,
             detected_stack=["Needs agent verification"],
             architecture_notes=["Use repository evidence before changing cross-module behavior."],
             verification_commands={"test": "Needs agent verification"},
             constraints=["Do not modify application code during context setup."],
             risks=["Stale documentation can mislead future agents."],
             repo_map=["Read root manifests, source directories, tests, and CI before editing."],
-            readiness_findings=["Context pack generated and ready for repository-specific review."],
+            readiness_findings=[readiness],
             recommended_prompt="Use the generated context files before editing code.",
         )
 

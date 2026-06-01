@@ -94,7 +94,15 @@ function setResult(payload) {
     els.resultTitle.textContent = "Next Agent Prompt";
     els.promptTitle.textContent = mode === "new_project" ? "Critical Validation Prompt" : "Context Fill Prompt";
     els.promptOutput.value = state.generatedPrompt;
-    setStatus("Prompt ready", "ready");
+    if (payload.warning) {
+      // The context files were still written (idea preserved via the local draft),
+      // but the AI draft failed: tell the user instead of looking like a clean success.
+      els.result.hidden = false;
+      els.result.textContent = payload.warning;
+      setStatus(payload.warning, "error");
+    } else {
+      setStatus("Prompt ready", "ready");
+    }
     return;
   }
   els.resultTitle.textContent = "Result";

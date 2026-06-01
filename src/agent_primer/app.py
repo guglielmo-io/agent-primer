@@ -169,18 +169,19 @@ def create_app(config_store: ConfigStore | None = None) -> FastAPI:
 
     @app.post("/api/setup/dry-run")
     async def dry_run(request: SetupRequest) -> dict[str, object]:
-        target, _, pack, next_prompt, message = await _build_setup_pack(request, store)
+        target, _, pack, next_prompt, message, warning = await _build_setup_pack(request, store)
         planned = plan_writes(target, pack, overwrite=_effective_overwrite(request))
         return {
             "mode": request.mode.value,
             "message": message,
             "planned_writes": [action.model_dump() for action in planned],
             "next_prompt": next_prompt,
+            "warning": warning,
         }
 
     @app.post("/api/setup/apply")
     async def apply_setup(request: SetupRequest) -> dict[str, object]:
-        target, _, pack, next_prompt, message = await _build_setup_pack(request, store)
+        target, _, pack, next_prompt, message, warning = await _build_setup_pack(request, store)
         write_result = write_context_pack(target, pack, overwrite=_effective_overwrite(request))
         return {
             "mode": request.mode.value,
@@ -188,6 +189,7 @@ def create_app(config_store: ConfigStore | None = None) -> FastAPI:
             "updated_files": write_result.updated_files,
             "backup_path": write_result.backup_path,
             "next_prompt": next_prompt,
+            "warning": warning,
         }
 
     @app.post("/api/verify")
@@ -286,20 +288,22 @@ def _existing_directory(path: Path) -> Path:
 
 async def _build_setup_pack(
     request: SetupRequest, store: ConfigStore
-) -> tuple[Path, RepoScan, ContextPack, str, str]:
+) -> tuple[Path, RepoScan, ContextPack, str, str, str | None]:
     if request.mode == SetupMode.VERIFY_REPAIR:
         raise HTTPException(status_code=400, detail="Use /api/verify for context verification")
     target = _target_path(request)
     target.mkdir(parents=True, exist_ok=True)
     scan_result = scan_repo(target)
     if request.mode == SetupMode.NEW_PROJECT:
-        draft = await _draft_new_project_context(request, scan_result, store)
+        draft, warning = await _draft_new_project_context(request, scan_result, store)
         pack = build_context_pack(scan_result, draft)
-        prompt = compile_new_project_validation_prompt(str(target), pack)
-        return target, scan_result, pack, prompt, "Provisional project context created."
+        prompt = compile_new_project_validation_prompt(
+            str(target), pack, str(request.raw_idea or "")
+        )
+        return target, scan_result, pack, prompt, "Provisional project context created.", warning
     pack = build_existing_template_pack(scan_result)
     prompt = compile_existing_fill_prompt(str(target), pack)
-    return target, scan_result, pack, prompt, "Context templates created."
+    return target, scan_result, pack, prompt, "Context templates created.", None
 
 
 def _target_path(request: SetupRequest) -> Path:
@@ -314,26 +318,28 @@ def _effective_overwrite(request: SetupRequest) -> bool:
 
 async def _draft_new_project_context(
     request: SetupRequest, scan_result: RepoScan, store: ConfigStore
-) -> AiContextDraft:
+) -> tuple[AiContextDraft, str | None]:
+    fallback_name = request.project_name or Path(scan_result.root_path).name
     key = store.get_api_key(request.openrouter_api_key)
     if not key:
         return AiContextDraft.example(
-            project_name=request.project_name or Path(scan_result.root_path).name
-        )
+            project_name=fallback_name, product_idea=request.raw_idea
+        ), None
     client = OpenRouterClient(key)
     prompt = new_project_planner_prompt(str(request.project_name), str(request.raw_idea))
     try:
         data = await client.complete_json(
             request.openrouter_model, prompt, **model_request_options(request.openrouter_model)
         )
-        data.pop("project_name", None)
-        return AiContextDraft(
-            project_name=request.project_name or Path(scan_result.root_path).name, **data
-        )
-    except Exception:
+    except Exception as exc:
+        # A key was configured but the AI draft failed. Keep the idea in the files via
+        # the fallback draft, and surface the failure instead of masquerading as success.
+        warning = _ai_failure_warning(request.openrouter_model, exc)
         return AiContextDraft.example(
-            project_name=request.project_name or Path(scan_result.root_path).name
-        )
+            project_name=fallback_name, product_idea=request.raw_idea
+        ), warning
+    data.pop("project_name", None)
+    return AiContextDraft(project_name=fallback_name, **data), None
 
 
 async def _upgrade_prompt(request: PromptUpgradeRequest, store: ConfigStore) -> PromptUpgradeResult:
