@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
+import re
+import tomllib
 from pathlib import Path
 
 from agent_primer.models import RepoScan, SymbolicArea
-
 
 MANIFESTS = {
     "package.json",
@@ -83,7 +84,9 @@ def scan_repo(root: Path) -> RepoScan:
         if manifest.endswith("/package.json"):
             nested_package_manager = _detect_package_manager(manifest_path.parent) or "npm"
             commands.update(_package_commands(manifest_path, nested_package_manager, prefix=prefix))
-            language_hints.append("TypeScript" if _has_ts_files(manifest_path.parent) else "JavaScript")
+            language_hints.append(
+                "TypeScript" if _has_ts_files(manifest_path.parent) else "JavaScript"
+            )
             continue
         if prefix and manifest_name in {"requirements.txt", "pyproject.toml"}:
             commands.update(_python_commands(root / prefix, project_root=root, prefix=prefix))
@@ -101,7 +104,12 @@ def scan_repo(root: Path) -> RepoScan:
             commands.update(_maven_commands(root / (prefix or "."), prefix))
             language_hints.append("Java")
             continue
-        if manifest_name in {"build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"}:
+        if manifest_name in {
+            "build.gradle",
+            "build.gradle.kts",
+            "settings.gradle",
+            "settings.gradle.kts",
+        }:
             commands.update(_gradle_commands(root / (prefix or "."), prefix))
             language_hints.append("Java")
             continue
@@ -149,6 +157,8 @@ def scan_repo(root: Path) -> RepoScan:
         commands=commands,
         package_manager=package_manager,
         symbolic_areas=_symbolic_areas(root),
+        dependencies=_dependencies(root, root_files),
+        entry_points=_entry_points(root),
     )
 
 
@@ -160,7 +170,9 @@ def _top_level_dirs(root: Path) -> list[str]:
     return sorted(
         path.name
         for path in root.iterdir()
-        if path.is_dir() and not path.name.startswith(".") and path.name not in IGNORED_TOP_LEVEL_DIRS
+        if path.is_dir()
+        and not path.name.startswith(".")
+        and path.name not in IGNORED_TOP_LEVEL_DIRS
     )
 
 
@@ -193,7 +205,10 @@ def _source_dirs(root: Path, top_level_dirs: list[str]) -> list[str]:
     for directory in top_level_dirs:
         if directory in {"test", "tests", "__tests__", "docs"}:
             continue
-        if any(path.suffix == ".py" and not _is_ignored_path(path, root) for path in (root / directory).rglob("*.py")):
+        if any(
+            path.suffix == ".py" and not _is_ignored_path(path, root)
+            for path in (root / directory).rglob("*.py")
+        ):
             source_dirs.add(directory)
     return sorted(source_dirs)
 
@@ -290,14 +305,20 @@ def _detect_package_manager(root: Path) -> str | None:
     return None
 
 
-def _package_commands(package_json: Path, package_manager: str, prefix: str | None = None) -> dict[str, str]:
-    data = json.loads(package_json.read_text(encoding="utf-8"))
+def _package_commands(
+    package_json: Path, package_manager: str, prefix: str | None = None
+) -> dict[str, str]:
+    data = _load_json(package_json)
     scripts = data.get("scripts", {})
+    if not isinstance(scripts, dict):
+        scripts = {}
     command_prefix = f"{prefix}:" if prefix else ""
     commands = {f"{command_prefix}install": _scoped_command(f"{package_manager} install", prefix)}
     for key in ("dev", "test", "lint", "typecheck", "build", "start"):
         if key in scripts:
-            commands[f"{command_prefix}{key}"] = _scoped_command(_script_command(package_manager, key), prefix)
+            commands[f"{command_prefix}{key}"] = _scoped_command(
+                _script_command(package_manager, key), prefix
+            )
     return commands
 
 
@@ -317,23 +338,39 @@ def _scoped_command(command: str, prefix: str | None) -> str:
     return f"cd {prefix} && {command}"
 
 
-def _python_commands(root: Path, project_root: Path | None = None, prefix: str | None = None) -> dict[str, str]:
-    text = (root / "pyproject.toml").read_text(encoding="utf-8") if (root / "pyproject.toml").exists() else ""
+def _python_commands(
+    root: Path, project_root: Path | None = None, prefix: str | None = None
+) -> dict[str, str]:
+    text = (
+        (root / "pyproject.toml").read_text(encoding="utf-8")
+        if (root / "pyproject.toml").exists()
+        else ""
+    )
     test_root = project_root or root
     command_prefix = f"{prefix}:" if prefix else ""
     commands: dict[str, str] = {}
     if "[tool.pytest" in text:
         test_command = "pytest"
-        commands[f"{command_prefix}test"] = f"PYTHONPATH={prefix} {test_command}" if prefix else test_command
+        commands[f"{command_prefix}test"] = (
+            f"PYTHONPATH={prefix} {test_command}" if prefix else test_command
+        )
     elif (test_root / "tests").exists():
         test_command = "python -m unittest discover -s tests"
-        commands[f"{command_prefix}test"] = f"PYTHONPATH={prefix} {test_command}" if prefix else test_command
+        commands[f"{command_prefix}test"] = (
+            f"PYTHONPATH={prefix} {test_command}" if prefix else test_command
+        )
     if "[tool.ruff" in text:
-        commands[f"{command_prefix}lint"] = f"PYTHONPATH={prefix} ruff check ." if prefix else "ruff check ."
+        commands[f"{command_prefix}lint"] = (
+            f"PYTHONPATH={prefix} ruff check ." if prefix else "ruff check ."
+        )
     if "[tool.mypy" in text:
-        commands[f"{command_prefix}typecheck"] = f"PYTHONPATH={prefix} mypy ." if prefix else "mypy ."
+        commands[f"{command_prefix}typecheck"] = (
+            f"PYTHONPATH={prefix} mypy ." if prefix else "mypy ."
+        )
     if "[build-system]" in text:
-        commands[f"{command_prefix}build"] = f"cd {prefix} && python -m build" if prefix else "python -m build"
+        commands[f"{command_prefix}build"] = (
+            f"cd {prefix} && python -m build" if prefix else "python -m build"
+        )
     return commands
 
 
@@ -382,7 +419,9 @@ def _composer_commands(composer_json: Path, prefix: str | None = None) -> dict[s
         scripts = {}
     for script in ("test", "lint", "analyse", "analyze"):
         if script in scripts:
-            commands[_stack_key("composer", script, prefix)] = _scope_shell(f"composer {script}", prefix)
+            commands[_stack_key("composer", script, prefix)] = _scope_shell(
+                f"composer {script}", prefix
+            )
     return commands
 
 
@@ -477,6 +516,186 @@ def _has_ts_files(root: Path) -> bool:
     return False
 
 
+def _dependencies(root: Path, root_files: list[str]) -> dict[str, list[str]]:
+    """Parse real dependency names from root manifests, per ecosystem.
+
+    Names only (no versions) to stay compact; malformed manifests are skipped,
+    never raised, so a single bad file cannot break a scan.
+    """
+    deps: dict[str, list[str]] = {}
+    if "package.json" in root_files:
+        node = _node_dependencies(root / "package.json")
+        if node:
+            deps["node"] = node
+    python = _python_dependencies(root)
+    if python:
+        deps["python"] = python
+    if "go.mod" in root_files:
+        go = _go_dependencies(root / "go.mod")
+        if go:
+            deps["go"] = go
+    if "Cargo.toml" in root_files:
+        rust = _cargo_dependencies(root / "Cargo.toml")
+        if rust:
+            deps["rust"] = rust
+    return deps
+
+
+def _node_dependencies(path: Path) -> list[str]:
+    data = _load_json(path)
+    names: list[str] = []
+    for key in ("dependencies", "devDependencies", "peerDependencies"):
+        section = data.get(key)
+        if isinstance(section, dict):
+            names.extend(str(name) for name in section)
+    return _bounded_unique(names)
+
+
+def _python_dependencies(root: Path) -> list[str]:
+    names: list[str] = []
+    pyproject = root / "pyproject.toml"
+    if pyproject.exists():
+        data = _load_toml(pyproject)
+        project = data.get("project")
+        if isinstance(project, dict):
+            names.extend(
+                _requirement_name(req) for req in _as_str_list(project.get("dependencies"))
+            )
+            optional = project.get("optional-dependencies")
+            if isinstance(optional, dict):
+                for group in optional.values():
+                    names.extend(_requirement_name(req) for req in _as_str_list(group))
+        tool = data.get("tool")
+        poetry = tool.get("poetry") if isinstance(tool, dict) else None
+        poetry_deps = poetry.get("dependencies") if isinstance(poetry, dict) else None
+        if isinstance(poetry_deps, dict):
+            names.extend(str(name) for name in poetry_deps if name != "python")
+    requirements = root / "requirements.txt"
+    if requirements.exists():
+        names.extend(_requirement_name(line) for line in _read_lines(requirements))
+    return _bounded_unique(names)
+
+
+def _go_dependencies(path: Path) -> list[str]:
+    names: list[str] = []
+    in_block = False
+    for line in _read_lines(path):
+        stripped = line.strip()
+        if stripped.startswith("//"):
+            continue
+        if stripped.startswith("require ("):
+            in_block = True
+            continue
+        if in_block and stripped == ")":
+            in_block = False
+            continue
+        target = stripped
+        if not in_block:
+            if not stripped.startswith("require "):
+                continue
+            target = stripped[len("require ") :]
+        parts = target.split()
+        if parts:
+            names.append(parts[0])
+    return _bounded_unique(names)
+
+
+def _cargo_dependencies(path: Path) -> list[str]:
+    data = _load_toml(path)
+    names: list[str] = []
+    for key in ("dependencies", "dev-dependencies", "build-dependencies"):
+        section = data.get(key)
+        if isinstance(section, dict):
+            names.extend(str(name) for name in section)
+    return _bounded_unique(names)
+
+
+def _entry_points(root: Path) -> list[str]:
+    """Detect likely runtime entry points across languages, relative to root."""
+    candidates = (
+        "main.py",
+        "app.py",
+        "manage.py",
+        "wsgi.py",
+        "asgi.py",
+        "app/main.py",
+        "app/__main__.py",
+        "src/main.py",
+        "src/__main__.py",
+        "src/index.ts",
+        "src/index.js",
+        "src/main.ts",
+        "src/main.rs",
+        "main.go",
+        "cmd",
+        "index.js",
+        "index.ts",
+        "server.js",
+        "server.ts",
+        "Main.java",
+    )
+    found: list[str] = []
+    for relative in candidates:
+        path = root / relative
+        if path.exists():
+            found.append(relative)
+    package_entry = _packaged_python_entry(root)
+    if package_entry:
+        found.append(package_entry)
+    return _bounded_unique(found, limit=12)
+
+
+def _packaged_python_entry(root: Path) -> str | None:
+    src = root / "src"
+    if not src.is_dir():
+        return None
+    for package in sorted(src.iterdir()):
+        if package.is_dir() and (package / "main.py").exists():
+            return f"src/{package.name}/main.py"
+    return None
+
+
+def _requirement_name(requirement: str) -> str:
+    text = requirement.strip()
+    if not text or text.startswith(("#", "-")):
+        return ""
+    match = re.match(r"[A-Za-z0-9][A-Za-z0-9._-]*", text)
+    return match.group(0) if match else ""
+
+
+def _as_str_list(value: object) -> list[str]:
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, str)]
+    return []
+
+
+def _bounded_unique(names: list[str], limit: int = 20) -> list[str]:
+    unique = sorted({name.strip() for name in names if name and name.strip()})
+    return unique[:limit]
+
+
+def _load_json(path: Path) -> dict[str, object]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _load_toml(path: Path) -> dict[str, object]:
+    try:
+        return tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, tomllib.TOMLDecodeError):
+        return {}
+
+
+def _read_lines(path: Path) -> list[str]:
+    try:
+        return path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+
+
 def _symbolic_areas(root: Path) -> list[SymbolicArea]:
     patterns = {
         "Auth Boundary": [
@@ -485,12 +704,24 @@ def _symbolic_areas(root: Path) -> list[SymbolicArea]:
             "src/**/auth/**/*",
             "src/**/session.*",
             "src/**/session/**/*",
+            # Language-agnostic auth/security surfaces (Python, Go, Rust, Java, ...).
+            "**/auth/**/*",
+            "**/auth.*",
+            "**/security.*",
+            "**/permissions.*",
+            "**/middleware.py",
         ],
         "API Routes": [
             "src/app/api/**/*",
             "src/pages/api/**/*",
             "app/api/**/*",
             "pages/api/**/*",
+            # Framework-agnostic route/handler/controller layouts.
+            "**/routes/**/*",
+            "**/routers/**/*",
+            "**/controllers/**/*",
+            "**/handlers/**/*",
+            "api/**/*",
         ],
         "Database Layer": [
             "prisma/schema.prisma",
@@ -498,6 +729,21 @@ def _symbolic_areas(root: Path) -> list[SymbolicArea]:
             "src/**/database.*",
             "src/**/supabase.*",
             "supabase/config.toml",
+            # ORM/model/migration layouts beyond the JS ecosystem.
+            "**/models.py",
+            "**/models/**/*",
+            "**/migrations/**/*",
+            "**/repository/**/*",
+            "**/repositories/**/*",
+            "alembic.ini",
+        ],
+        "Background Jobs": [
+            "**/tasks.py",
+            "**/celery.*",
+            "**/worker.*",
+            "**/workers/**/*",
+            "jobs/**/*",
+            "queue/**/*",
         ],
         "Billing Flow": [
             "src/**/stripe.*",
@@ -542,7 +788,11 @@ def _symbolic_matches(root: Path, patterns: list[str]) -> list[str]:
     matches: set[str] = set()
     for pattern in patterns:
         for path in root.glob(pattern):
-            if path.is_file() and (_is_explicit_hidden_pattern(pattern) or not _is_ignored_path(path, root)) and path.suffix != ".pyc":
+            if (
+                path.is_file()
+                and (_is_explicit_hidden_pattern(pattern) or not _is_ignored_path(path, root))
+                and path.suffix != ".pyc"
+            ):
                 matches.add(_relative_path(path, root))
     return sorted(matches)
 
@@ -553,7 +803,10 @@ def _is_explicit_hidden_pattern(pattern: str) -> bool:
 
 def _is_ignored_path(path: Path, root: Path) -> bool:
     relative = path.relative_to(root)
-    return any(part in IGNORED_TOP_LEVEL_DIRS or part.startswith(".") and part != ".github" for part in relative.parts)
+    return any(
+        part in IGNORED_TOP_LEVEL_DIRS or part.startswith(".") and part != ".github"
+        for part in relative.parts
+    )
 
 
 def _relative_path(path: Path, root: Path) -> str:

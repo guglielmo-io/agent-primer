@@ -30,19 +30,23 @@ class SetupRequest(BaseModel):
         if value is None:
             return value
         if not re.fullmatch(r"[A-Za-z0-9_-]+", value):
-            raise ValueError("project_name may contain letters, numbers, hyphen, and underscore only")
+            raise ValueError(
+                "project_name may contain letters, numbers, hyphen, and underscore only"
+            )
         return value
 
     @model_validator(mode="after")
-    def validate_mode_requirements(self) -> "SetupRequest":
+    def validate_mode_requirements(self) -> SetupRequest:
         if self.mode == SetupMode.NEW_PROJECT:
             if not self.project_name or not self.raw_idea:
                 raise ValueError("new_project requires project_name and raw_idea")
             if not self.target_path.exists():
                 raise ValueError("new_project target_path parent must exist")
-        if self.mode in {SetupMode.EXISTING_PROJECT, SetupMode.VERIFY_REPAIR}:
-            if not self.target_path.exists():
-                raise ValueError(f"{self.mode.value} requires an existing target_path")
+        if (
+            self.mode in {SetupMode.EXISTING_PROJECT, SetupMode.VERIFY_REPAIR}
+            and not self.target_path.exists()
+        ):
+            raise ValueError(f"{self.mode.value} requires an existing target_path")
         return self
 
 
@@ -77,6 +81,10 @@ class RepoScan(BaseModel):
     commands: dict[str, str] = Field(default_factory=dict)
     package_manager: str | None = None
     symbolic_areas: list[SymbolicArea] = Field(default_factory=list)
+    # Real dependency names parsed from root manifests, keyed by ecosystem
+    # (python, node, go, rust). Ground truth so agents fill less of the stack by guesswork.
+    dependencies: dict[str, list[str]] = Field(default_factory=dict)
+    entry_points: list[str] = Field(default_factory=list)
 
 
 class AiContextDraft(BaseModel):
@@ -92,7 +100,7 @@ class AiContextDraft(BaseModel):
     recommended_prompt: str = ""
 
     @classmethod
-    def example(cls, project_name: str = "AI Ready Repository") -> "AiContextDraft":
+    def example(cls, project_name: str = "AI Ready Repository") -> AiContextDraft:
         return cls(
             project_name=project_name,
             product_summary="Repository context pack generated for AI-assisted software engineering.",

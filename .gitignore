@@ -19,6 +19,13 @@ env/
 # Local app state
 .agent-primer/
 
+# Local-only agent/dev config (must never be published)
+.claude/
+CLAUDE.md
+GEMINI.md
+.cursor/
+.windsurf/
+
 # OS and editors
 .DS_Store
 Thumbs.db

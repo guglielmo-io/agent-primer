@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from conftest import FIXTURES
 from agent_primer.scanner import scan_repo
+from conftest import FIXTURES
 
 
 def test_node_repo_detects_package_scripts():
@@ -36,11 +36,81 @@ def test_python_repo_detects_pytest_and_tools():
     assert ".env.example" in scan.env_examples
 
 
+def test_node_repo_extracts_dependency_names():
+    scan = scan_repo(FIXTURES / "node_repo")
+
+    assert scan.dependencies["node"] == ["next", "react", "typescript", "vitest"]
+
+
+def test_python_dependencies_parsed_from_pyproject_and_requirements(tmp_path: Path):
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "0"\n'
+        'dependencies = ["fastapi>=0.115", "httpx[http2]>=0.27"]\n'
+        '[project.optional-dependencies]\ndev = ["pytest>=8"]\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "requirements.txt").write_text(
+        "pydantic>=2\n# a comment\n-e .\nuvicorn\n", encoding="utf-8"
+    )
+
+    scan = scan_repo(tmp_path)
+
+    # Names only, version specifiers/extras/comments/pip-options stripped, sorted+unique.
+    assert scan.dependencies["python"] == ["fastapi", "httpx", "pydantic", "pytest", "uvicorn"]
+
+
+def test_malformed_manifest_does_not_break_scan(tmp_path: Path):
+    (tmp_path / "package.json").write_text("{not valid json", encoding="utf-8")
+
+    scan = scan_repo(tmp_path)
+
+    assert "node" not in scan.dependencies
+
+
+def test_entry_points_detected_across_languages(tmp_path: Path):
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "main.py").write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "main.go").write_text("package main\n", encoding="utf-8")
+
+    scan = scan_repo(tmp_path)
+
+    assert "app/main.py" in scan.entry_points
+    assert "main.go" in scan.entry_points
+
+
+def test_packaged_python_entry_point_detected(tmp_path: Path):
+    package = tmp_path / "src" / "mypkg"
+    package.mkdir(parents=True)
+    (package / "main.py").write_text("def main():\n    pass\n", encoding="utf-8")
+
+    scan = scan_repo(tmp_path)
+
+    assert "src/mypkg/main.py" in scan.entry_points
+
+
+def test_symbolic_areas_detect_non_javascript_layouts(tmp_path: Path):
+    (tmp_path / "app" / "routers").mkdir(parents=True)
+    (tmp_path / "app" / "routers" / "users.py").write_text("router = 1\n", encoding="utf-8")
+    (tmp_path / "app" / "models.py").write_text("class User: ...\n", encoding="utf-8")
+    (tmp_path / "app" / "tasks.py").write_text("def job(): ...\n", encoding="utf-8")
+    (tmp_path / "app" / "auth.py").write_text("def login(): ...\n", encoding="utf-8")
+
+    scan = scan_repo(tmp_path)
+    areas = {area.name for area in scan.symbolic_areas}
+
+    assert "API Routes" in areas
+    assert "Database Layer" in areas
+    assert "Background Jobs" in areas
+    assert "Auth Boundary" in areas
+
+
 def test_empty_project_does_not_invent_commands(tmp_path: Path):
     scan = scan_repo(tmp_path)
 
     assert scan.commands == {}
     assert scan.manifest_files == []
+    assert scan.dependencies == {}
+    assert scan.entry_points == []
 
 
 def test_npm_non_lifecycle_scripts_use_run(tmp_path: Path):
@@ -61,7 +131,9 @@ def test_scan_includes_top_level_nested_package_manifests(tmp_path: Path):
     (tmp_path / "package.json").write_text('{"scripts":{"build":"vite build"}}', encoding="utf-8")
     api_dir = tmp_path / "api"
     api_dir.mkdir()
-    (api_dir / "package.json").write_text('{"scripts":{"dev":"nodemon src/index.js","start":"node src/index.js"}}', encoding="utf-8")
+    (api_dir / "package.json").write_text(
+        '{"scripts":{"dev":"nodemon src/index.js","start":"node src/index.js"}}', encoding="utf-8"
+    )
 
     scan = scan_repo(tmp_path)
 
@@ -97,7 +169,9 @@ def test_scan_detects_deep_package_and_nested_python_project(tmp_path: Path):
     assert "mcp-servers/posthog/package.json" in scan.manifest_files
     assert scan.source_dirs == ["bot"]
     assert scan.commands["bot:test"] == "PYTHONPATH=bot python -m unittest discover -s tests"
-    assert scan.commands["mcp-servers/posthog:build"] == "npm --prefix mcp-servers/posthog run build"
+    assert (
+        scan.commands["mcp-servers/posthog:build"] == "npm --prefix mcp-servers/posthog run build"
+    )
     assert scan.commands["mcp-servers/posthog:dev"] == "npm --prefix mcp-servers/posthog run dev"
     assert "tests/test_config.py" in areas["Test Surface"]
     assert all("__pycache__" not in path for path in areas["Test Surface"])
@@ -114,9 +188,9 @@ def test_scan_ignores_generated_top_level_directories(tmp_path: Path):
 
 def test_scan_collects_context_evidence_for_common_non_node_python_stacks(tmp_path: Path):
     (tmp_path / "go.mod").write_text("module example.com/app\n", encoding="utf-8")
-    (tmp_path / "Cargo.toml").write_text("[package]\nname = \"app\"\n", encoding="utf-8")
+    (tmp_path / "Cargo.toml").write_text('[package]\nname = "app"\n', encoding="utf-8")
     (tmp_path / "build.gradle.kts").write_text("plugins { java }\n", encoding="utf-8")
-    (tmp_path / "App.csproj").write_text("<Project Sdk=\"Microsoft.NET.Sdk\" />\n", encoding="utf-8")
+    (tmp_path / "App.csproj").write_text('<Project Sdk="Microsoft.NET.Sdk" />\n', encoding="utf-8")
     (tmp_path / "Makefile").write_text("test:\n\tgo test ./...\n", encoding="utf-8")
     (tmp_path / ".gitlab-ci.yml").write_text("test:\n  script: go test ./...\n", encoding="utf-8")
 

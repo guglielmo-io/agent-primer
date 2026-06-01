@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 import sys
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -13,7 +15,14 @@ from pydantic import BaseModel
 from agent_primer.config import AppConfig, ConfigStore
 from agent_primer.context_pack import build_context_pack, build_existing_template_pack
 from agent_primer.model_presets import DEFAULT_MODEL, model_presets, model_request_options
-from agent_primer.models import AiContextDraft, ContextPack, RepoScan, ScoreBreakdown, SetupMode, SetupRequest
+from agent_primer.models import (
+    AiContextDraft,
+    ContextPack,
+    RepoScan,
+    ScoreBreakdown,
+    SetupMode,
+    SetupRequest,
+)
 from agent_primer.openrouter import OpenRouterClient
 from agent_primer.prompt_compiler import (
     build_ai_repair_prompt_request,
@@ -21,7 +30,6 @@ from agent_primer.prompt_compiler import (
     compile_new_project_validation_prompt,
     compile_repair_prompt,
 )
-from agent_primer.prompts import new_project_planner_prompt
 from agent_primer.prompt_upgrade import (
     PromptUpgradeResult,
     build_ai_prompt_upgrade_request,
@@ -29,6 +37,7 @@ from agent_primer.prompt_upgrade import (
     score_prompt,
     upgrade_prompt,
 )
+from agent_primer.prompts import new_project_planner_prompt
 from agent_primer.scanner import scan_repo
 from agent_primer.scoring import score_existing_context
 from agent_primer.writer import plan_writes, write_context_pack
@@ -74,7 +83,9 @@ def create_app(config_store: ConfigStore | None = None) -> FastAPI:
         app.mount("/static", StaticFiles(directory=web_dir), name="static")
 
     @app.middleware("http")
-    async def no_cache_static_assets(request, call_next):
+    async def no_cache_static_assets(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
         response = await call_next(request)
         if request.url.path == "/" or request.url.path.startswith("/static/"):
             response.headers["Cache-Control"] = "no-store"
@@ -100,11 +111,13 @@ def create_app(config_store: ConfigStore | None = None) -> FastAPI:
             try:
                 if not child.is_dir():
                     continue
-                directories.append({
-                    "name": child.name,
-                    "path": str(child.resolve()),
-                    "hidden": child.name.startswith("."),
-                })
+                directories.append(
+                    {
+                        "name": child.name,
+                        "path": str(child.resolve()),
+                        "hidden": child.name.startswith("."),
+                    }
+                )
             except OSError:
                 continue
         directories.sort(key=lambda item: (item["hidden"], str(item["name"]).lower()))
@@ -129,7 +142,9 @@ def create_app(config_store: ConfigStore | None = None) -> FastAPI:
         key = store.get_api_key()
         if not key:
             raise HTTPException(status_code=400, detail="OpenRouter API key is missing")
-        return {"models": [model.model_dump() for model in await OpenRouterClient(key).list_models()]}
+        return {
+            "models": [model.model_dump() for model in await OpenRouterClient(key).list_models()]
+        }
 
     @app.get("/api/model-presets")
     def read_model_presets() -> dict[str, object]:
@@ -138,11 +153,13 @@ def create_app(config_store: ConfigStore | None = None) -> FastAPI:
     @app.post("/api/config/openrouter")
     def save_openrouter_config(request: ConfigRequest) -> dict[str, bool]:
         current = store.load()
-        store.save(AppConfig(
-            openrouter_api_key=request.openrouter_api_key or current.openrouter_api_key,
-            last_model=request.last_model or current.last_model,
-            recent_paths=current.recent_paths,
-        ))
+        store.save(
+            AppConfig(
+                openrouter_api_key=request.openrouter_api_key or current.openrouter_api_key,
+                last_model=request.last_model or current.last_model,
+                recent_paths=current.recent_paths,
+            )
+        )
         return {"ok": True}
 
     @app.post("/api/scan")
@@ -177,7 +194,12 @@ def create_app(config_store: ConfigStore | None = None) -> FastAPI:
     async def verify(request: VerifyRequest) -> dict[str, object]:
         target = _existing_directory(request.target_path)
         score = score_existing_context(target)
-        repair_prompt, repair_source, repair_ai_review = await _repair_context_prompt(request, score, store)
+        (
+            repair_prompt,
+            repair_source,
+            repair_ai_review,
+            repair_warning,
+        ) = await _repair_context_prompt(request, score, store)
         return {
             "mode": SetupMode.VERIFY_REPAIR.value,
             "message": "Context verification completed.",
@@ -185,6 +207,7 @@ def create_app(config_store: ConfigStore | None = None) -> FastAPI:
             "repair_prompt": repair_prompt,
             "repair_source": repair_source,
             "repair_ai_review": repair_ai_review,
+            "repair_warning": repair_warning,
         }
 
     @app.post("/api/prompt/upgrade")
@@ -199,6 +222,7 @@ def create_app(config_store: ConfigStore | None = None) -> FastAPI:
             "upgraded_prompt": result.upgraded_prompt,
             "score": result.score.model_dump(),
             "ai_review": result.ai_review,
+            "warning": result.warning,
         }
 
     @app.post("/api/prompt/revise")
@@ -206,8 +230,15 @@ def create_app(config_store: ConfigStore | None = None) -> FastAPI:
         key = store.get_api_key(request.openrouter_api_key)
         if not key:
             raise HTTPException(status_code=400, detail="OpenRouter API key is missing")
-        if not request.raw_prompt.strip() or not request.current_prompt.strip() or not request.revision_request.strip():
-            raise HTTPException(status_code=400, detail="Raw prompt, current prompt, and revision request are required")
+        if (
+            not request.raw_prompt.strip()
+            or not request.current_prompt.strip()
+            or not request.revision_request.strip()
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="Raw prompt, current prompt, and revision request are required",
+            )
         score = score_prompt(request.current_prompt)
         prompt = build_prompt_revision_request(
             raw_prompt=request.raw_prompt,
@@ -253,7 +284,9 @@ def _existing_directory(path: Path) -> Path:
     return path
 
 
-async def _build_setup_pack(request: SetupRequest, store: ConfigStore) -> tuple[Path, RepoScan, ContextPack, str, str]:
+async def _build_setup_pack(
+    request: SetupRequest, store: ConfigStore
+) -> tuple[Path, RepoScan, ContextPack, str, str]:
     if request.mode == SetupMode.VERIFY_REPAIR:
         raise HTTPException(status_code=400, detail="Use /api/verify for context verification")
     target = _target_path(request)
@@ -279,18 +312,28 @@ def _effective_overwrite(request: SetupRequest) -> bool:
     return request.mode == SetupMode.NEW_PROJECT and request.overwrite
 
 
-async def _draft_new_project_context(request: SetupRequest, scan_result: RepoScan, store: ConfigStore) -> AiContextDraft:
+async def _draft_new_project_context(
+    request: SetupRequest, scan_result: RepoScan, store: ConfigStore
+) -> AiContextDraft:
     key = store.get_api_key(request.openrouter_api_key)
     if not key:
-        return AiContextDraft.example(project_name=request.project_name or Path(scan_result.root_path).name)
+        return AiContextDraft.example(
+            project_name=request.project_name or Path(scan_result.root_path).name
+        )
     client = OpenRouterClient(key)
     prompt = new_project_planner_prompt(str(request.project_name), str(request.raw_idea))
     try:
-        data = await client.complete_json(request.openrouter_model, prompt, **model_request_options(request.openrouter_model))
+        data = await client.complete_json(
+            request.openrouter_model, prompt, **model_request_options(request.openrouter_model)
+        )
         data.pop("project_name", None)
-        return AiContextDraft(project_name=request.project_name or Path(scan_result.root_path).name, **data)
+        return AiContextDraft(
+            project_name=request.project_name or Path(scan_result.root_path).name, **data
+        )
     except Exception:
-        return AiContextDraft.example(project_name=request.project_name or Path(scan_result.root_path).name)
+        return AiContextDraft.example(
+            project_name=request.project_name or Path(scan_result.root_path).name
+        )
 
 
 async def _upgrade_prompt(request: PromptUpgradeRequest, store: ConfigStore) -> PromptUpgradeResult:
@@ -301,51 +344,78 @@ async def _upgrade_prompt(request: PromptUpgradeRequest, store: ConfigStore) -> 
     model = request.openrouter_model or store.load().last_model or DEFAULT_MODEL
     prompt = build_ai_prompt_upgrade_request(request.raw_prompt, local_result.upgraded_prompt)
     try:
-        data = await OpenRouterClient(key).complete_json(model, prompt, **model_request_options(model))
-    except Exception:
-        return local_result
+        data = await OpenRouterClient(key).complete_json(
+            model, prompt, **model_request_options(model)
+        )
+    except Exception as exc:
+        # A key was configured but the AI path failed: keep the tool usable with the
+        # local prompt, but tell the user instead of masquerading as an AI success.
+        return local_result.model_copy(update={"warning": _ai_failure_warning(model, exc)})
     upgraded_prompt = str(data.get("upgraded_prompt", "")).strip()
     if not upgraded_prompt:
-        return local_result
+        return local_result.model_copy(
+            update={"warning": _ai_failure_warning(model, "OpenRouter returned an empty prompt")}
+        )
     prompt_score = score_prompt(upgraded_prompt)
-    return local_result.model_copy(update={
-        "message": "Prompt upgraded with AI.",
-        "upgraded_prompt": upgraded_prompt,
-        "score": prompt_score,
-        "source": "ai",
-        "ai_review": data.get("quality_analysis"),
-    })
+    return local_result.model_copy(
+        update={
+            "message": "Prompt upgraded with AI.",
+            "upgraded_prompt": upgraded_prompt,
+            "score": prompt_score,
+            "source": "ai",
+            "ai_review": data.get("quality_analysis"),
+        }
+    )
 
 
 async def _repair_context_prompt(
     request: VerifyRequest,
     score: ScoreBreakdown,
     store: ConfigStore,
-) -> tuple[str | None, str | None, dict[str, object] | None]:
+) -> tuple[str | None, str | None, dict[str, object] | None, str | None]:
     if score.ready and not score.findings:
-        return None, None, None
+        return None, None, None, None
     local_prompt = compile_repair_prompt(str(request.target_path), score)
     key = store.get_api_key(request.openrouter_api_key)
     if not key:
-        return local_prompt, "local_fallback", None
+        return local_prompt, "local_fallback", None, None
     model = request.openrouter_model or store.load().last_model or DEFAULT_MODEL
     scan = scan_repo(request.target_path)
     prompt = build_ai_repair_prompt_request(str(request.target_path), score, scan, local_prompt)
     try:
-        data = await OpenRouterClient(key).complete_json(model, prompt, **model_request_options(model))
-    except Exception:
-        return local_prompt, "local_fallback", None
+        data = await OpenRouterClient(key).complete_json(
+            model, prompt, **model_request_options(model)
+        )
+    except Exception as exc:
+        return local_prompt, "local_fallback", None, _ai_failure_warning(model, exc)
     repair_prompt = str(data.get("repair_prompt", "")).strip()
     if not repair_prompt:
-        return local_prompt, "local_fallback", None
-    return repair_prompt, "ai", data.get("quality_analysis")
+        warning = _ai_failure_warning(model, "OpenRouter returned an empty prompt")
+        return local_prompt, "local_fallback", None, warning
+    return repair_prompt, "ai", data.get("quality_analysis"), None
+
+
+def _ai_failure_warning(model: str, error: object) -> str:
+    """Build a user-facing, secret-free explanation for an OpenRouter fallback.
+
+    Surfaces the configured model so an invalid/unknown model id is obvious, and
+    scrubs any bearer token that an httpx error string might echo back.
+    """
+    detail = re.sub(r"Bearer\s+\S+", "Bearer ***", str(error)).strip()
+    detail = detail[:200] or error.__class__.__name__
+    return (
+        f"AI generation failed for model '{model}'; showing the local prompt instead. "
+        f"Verify the model id exists on OpenRouter and the API key is valid. Details: {detail}"
+    )
 
 
 def _run_directory_picker(initial_path: str | None) -> Path | None:
     initial = _resolve_initial_path(initial_path)
     command = _directory_picker_command(initial)
     if command is None:
-        raise HTTPException(status_code=500, detail="No native directory picker found for this operating system.")
+        raise HTTPException(
+            status_code=500, detail="No native directory picker found for this operating system."
+        )
     try:
         result = subprocess.run(command, check=False, capture_output=True, text=True)
     except OSError as exc:

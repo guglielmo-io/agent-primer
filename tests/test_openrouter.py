@@ -21,9 +21,9 @@ class MockTransport(httpx.AsyncBaseTransport):
 
 @pytest.mark.asyncio
 async def test_model_list_is_parsed():
-    transport = MockTransport([
-        httpx.Response(200, json={"data": [{"id": "model", "name": "Model"}]})
-    ])
+    transport = MockTransport(
+        [httpx.Response(200, json={"data": [{"id": "model", "name": "Model"}]})]
+    )
     client = OpenRouterClient("key", transport=transport)
 
     models = await client.list_models()
@@ -33,10 +33,12 @@ async def test_model_list_is_parsed():
 
 @pytest.mark.asyncio
 async def test_invalid_json_triggers_one_repair_retry():
-    transport = MockTransport([
-        httpx.Response(200, json={"choices": [{"message": {"content": "not-json"}}]}),
-        httpx.Response(200, json={"choices": [{"message": {"content": "{\"ok\": true}"}}]}),
-    ])
+    transport = MockTransport(
+        [
+            httpx.Response(200, json={"choices": [{"message": {"content": "not-json"}}]}),
+            httpx.Response(200, json={"choices": [{"message": {"content": '{"ok": true}'}}]}),
+        ]
+    )
     client = OpenRouterClient("key", transport=transport)
 
     result = await client.complete_json("model", "prompt")
@@ -47,9 +49,13 @@ async def test_invalid_json_triggers_one_repair_retry():
 
 @pytest.mark.asyncio
 async def test_fenced_json_response_is_parsed_without_retry():
-    transport = MockTransport([
-        httpx.Response(200, json={"choices": [{"message": {"content": "```json\n{\"ok\": true}\n```"}}]}),
-    ])
+    transport = MockTransport(
+        [
+            httpx.Response(
+                200, json={"choices": [{"message": {"content": '```json\n{"ok": true}\n```'}}]}
+            ),
+        ]
+    )
     client = OpenRouterClient("key", transport=transport)
 
     result = await client.complete_json("model", "prompt")
@@ -60,9 +66,11 @@ async def test_fenced_json_response_is_parsed_without_retry():
 
 @pytest.mark.asyncio
 async def test_reasoning_effort_is_sent_when_requested():
-    transport = MockTransport([
-        httpx.Response(200, json={"choices": [{"message": {"content": "{\"ok\": true}"}}]}),
-    ])
+    transport = MockTransport(
+        [
+            httpx.Response(200, json={"choices": [{"message": {"content": '{"ok": true}'}}]}),
+        ]
+    )
     client = OpenRouterClient("key", transport=transport)
 
     await client.complete_json("openai/gpt-5.5", "prompt", reasoning_effort="xhigh")
@@ -74,9 +82,11 @@ async def test_reasoning_effort_is_sent_when_requested():
 
 @pytest.mark.asyncio
 async def test_verbosity_is_sent_without_temperature_for_opus_max():
-    transport = MockTransport([
-        httpx.Response(200, json={"choices": [{"message": {"content": "{\"ok\": true}"}}]}),
-    ])
+    transport = MockTransport(
+        [
+            httpx.Response(200, json={"choices": [{"message": {"content": '{"ok": true}'}}]}),
+        ]
+    )
     client = OpenRouterClient("key", transport=transport)
 
     await client.complete_json("anthropic/claude-opus-4.7", "prompt", verbosity="max")

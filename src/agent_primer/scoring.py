@@ -7,7 +7,6 @@ from agent_primer.context_pack import REQUIRED_FILES
 from agent_primer.models import ContextPack, Finding, RepoScan, ScoreBreakdown
 from agent_primer.scanner import scan_repo
 
-
 FORBIDDEN_MARKERS = ("TODO", "TBD", "Lorem ipsum", "Fill this in")
 TEMPLATE_MARKERS = ("AGENT_FILL:",)
 GENERATED_REPO_MAP_DIRS = ("node_modules", "dist", "dist-server", "coverage")
@@ -36,13 +35,22 @@ def score_context_pack(pack: ContextPack, scan: RepoScan) -> ScoreBreakdown:
     }
     total = sum(categories.values())
     total = _apply_caps(total, pack, scan, findings)
-    return ScoreBreakdown(total=total, ready=total >= 85 and not findings, categories=categories, findings=findings)
+    return ScoreBreakdown(
+        total=total, ready=total >= 85 and not findings, categories=categories, findings=findings
+    )
 
 
 def _file_score(pack: ContextPack, findings: list[Finding]) -> int:
     missing = [path for path in REQUIRED_FILES if path not in pack.files]
     for path in missing:
-        findings.append(Finding(severity="P0", code="missing_file", message=f"Missing {path}", recommended_action=f"Create {path}"))
+        findings.append(
+            Finding(
+                severity="P0",
+                code="missing_file",
+                message=f"Missing {path}",
+                recommended_action=f"Create {path}",
+            )
+        )
     return round(15 * (len(REQUIRED_FILES) - len(missing)) / len(REQUIRED_FILES))
 
 
@@ -73,24 +81,42 @@ def _doc_score(pack: ContextPack, path: str) -> int:
 def _verification_score(pack: ContextPack, scan: RepoScan, findings: list[Finding]) -> int:
     text = pack.files.get("docs/ai/verification.md", "")
     if not text:
-        findings.append(Finding(severity="P0", code="missing_verification_doc", message="Verification doc is missing", recommended_action="Create docs/ai/verification.md"))
+        findings.append(
+            Finding(
+                severity="P0",
+                code="missing_verification_doc",
+                message="Verification doc is missing",
+                recommended_action="Create docs/ai/verification.md",
+            )
+        )
         return 0
     if not scan.commands:
         if _manual_verification_commands_present(text):
             return 18
-        findings.append(Finding(severity="P1", code="no_verification_commands", message="No reliable verification commands detected", recommended_action="Inspect manifests and CI"))
+        findings.append(
+            Finding(
+                severity="P1",
+                code="no_verification_commands",
+                message="No reliable verification commands detected",
+                recommended_action="Inspect manifests and CI",
+            )
+        )
         return 8
     verification_commands = _verification_commands(scan.commands)
     stale_commands = _add_stale_verification_command_findings(text, verification_commands, findings)
     for name, command in verification_commands.items():
         if not _command_present(text, command) and command not in stale_commands:
-            findings.append(Finding(
-                severity="P1",
-                code="missing_verification_command",
-                message=f"Verification doc does not include detected command `{command}` for `{name}`",
-                recommended_action=f"Add `{command}` to docs/ai/verification.md if it is still valid",
-            ))
-    matches = sum(1 for command in verification_commands.values() if _command_present(text, command))
+            findings.append(
+                Finding(
+                    severity="P1",
+                    code="missing_verification_command",
+                    message=f"Verification doc does not include detected command `{command}` for `{name}`",
+                    recommended_action=f"Add `{command}` to docs/ai/verification.md if it is still valid",
+                )
+            )
+    matches = sum(
+        1 for command in verification_commands.values() if _command_present(text, command)
+    )
     return min(20, 10 + matches * 3)
 
 
@@ -107,7 +133,14 @@ def _risk_score(pack: ContextPack) -> int:
 def _repo_map_score(pack: ContextPack, scan: RepoScan, findings: list[Finding]) -> int:
     text = pack.files.get("docs/ai/repo-map.md", "")
     if not text:
-        findings.append(Finding(severity="P0", code="missing_repo_map", message="Repo map is missing", recommended_action="Create docs/ai/repo-map.md"))
+        findings.append(
+            Finding(
+                severity="P0",
+                code="missing_repo_map",
+                message="Repo map is missing",
+                recommended_action="Create docs/ai/repo-map.md",
+            )
+        )
         return 0
     score = 4 if len(text) > 120 else 2
     if "Critical Files" in text:
@@ -116,20 +149,24 @@ def _repo_map_score(pack: ContextPack, scan: RepoScan, findings: list[Finding]) 
         score += 2
     for directory in GENERATED_REPO_MAP_DIRS:
         if _repo_map_lists_directory(text, directory):
-            findings.append(Finding(
-                severity="P1",
-                code="generated_dir_in_repo_map",
-                message=f"Repo map includes generated or dependency directory: {directory}",
-                recommended_action=f"Remove {directory} from docs/ai/repo-map.md unless it is intentionally source-controlled",
-            ))
+            findings.append(
+                Finding(
+                    severity="P1",
+                    code="generated_dir_in_repo_map",
+                    message=f"Repo map includes generated or dependency directory: {directory}",
+                    recommended_action=f"Remove {directory} from docs/ai/repo-map.md unless it is intentionally source-controlled",
+                )
+            )
     missing_areas = [area.name for area in scan.symbolic_areas if area.name not in text]
     for area_name in missing_areas:
-        findings.append(Finding(
-            severity="P1",
-            code="missing_symbolic_area",
-            message=f"Repo map misses symbolic area: {area_name}",
-            recommended_action=f"Add {area_name} paths to docs/ai/repo-map.md",
-        ))
+        findings.append(
+            Finding(
+                severity="P1",
+                code="missing_symbolic_area",
+                message=f"Repo map misses symbolic area: {area_name}",
+                recommended_action=f"Add {area_name} paths to docs/ai/repo-map.md",
+            )
+        )
     if not scan.symbolic_areas:
         score += 2
     if scan.symbolic_areas and not missing_areas:
@@ -144,25 +181,30 @@ def _freshness_score(pack: ContextPack, findings: list[Finding]) -> int:
             if marker not in text:
                 continue
             has_template_markers = True
-            findings.append(Finding(
-                severity="P0",
-                code="uncompiled_template",
-                message=f"Uncompiled template marker `{marker}` found in {path}",
-                recommended_action=f"Replace every `{marker}` section in {path} with verified repository evidence",
-            ))
+            findings.append(
+                Finding(
+                    severity="P0",
+                    code="uncompiled_template",
+                    message=f"Uncompiled template marker `{marker}` found in {path}",
+                    recommended_action=f"Replace every `{marker}` section in {path} with verified repository evidence",
+                )
+            )
     joined = "\n".join(pack.files.values())
     generic_markers = _generic_markers(joined)
     for marker in generic_markers:
-        findings.append(Finding(severity="P1", code="generic_marker", message=f"Generic marker found: {marker}", recommended_action="Replace generic text with repository evidence"))
+        findings.append(
+            Finding(
+                severity="P1",
+                code="generic_marker",
+                message=f"Generic marker found: {marker}",
+                recommended_action="Replace generic text with repository evidence",
+            )
+        )
     return 0 if generic_markers or has_template_markers else 5
 
 
 def _generic_markers(text: str) -> list[str]:
-    return [
-        marker
-        for marker in FORBIDDEN_MARKERS
-        if _generic_marker_present(text, marker)
-    ]
+    return [marker for marker in FORBIDDEN_MARKERS if _generic_marker_present(text, marker)]
 
 
 def _generic_marker_present(text: str, marker: str) -> bool:
@@ -182,7 +224,10 @@ def _apply_caps(total: int, pack: ContextPack, scan: RepoScan, findings: list[Fi
         total = min(total, 64)
     if any(finding.code == "generic_marker" for finding in findings):
         total = min(total, 82)
-    if any(finding.code in {"missing_verification_command", "stale_verification_command"} for finding in findings):
+    if any(
+        finding.code in {"missing_verification_command", "stale_verification_command"}
+        for finding in findings
+    ):
         total = min(total, 82)
     if any(finding.code == "generated_dir_in_repo_map" for finding in findings):
         total = min(total, 84)
@@ -209,12 +254,14 @@ def _add_stale_verification_command_findings(
         stale_command = _stale_npm_command(command)
         if stale_command and stale_command in text:
             stale_commands.add(command)
-            findings.append(Finding(
-                severity="P1",
-                code="stale_verification_command",
-                message=f"Verification doc uses `{stale_command}` for `{name}`, but npm scripts require `{command}`",
-                recommended_action=f"Replace `{stale_command}` with `{command}` in docs/ai/verification.md",
-            ))
+            findings.append(
+                Finding(
+                    severity="P1",
+                    code="stale_verification_command",
+                    message=f"Verification doc uses `{stale_command}` for `{name}`, but npm scripts require `{command}`",
+                    recommended_action=f"Replace `{stale_command}` with `{command}` in docs/ai/verification.md",
+                )
+            )
     return stale_commands
 
 

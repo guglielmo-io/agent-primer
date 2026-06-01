@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -10,7 +10,9 @@ from agent_primer.models import ModelInfo
 
 
 class OpenRouterClient:
-    def __init__(self, api_key: str, transport: httpx.AsyncBaseTransport | None = None, timeout: float = 90.0) -> None:
+    def __init__(
+        self, api_key: str, transport: httpx.AsyncBaseTransport | None = None, timeout: float = 90.0
+    ) -> None:
         self.api_key = api_key
         self.transport = transport
         self.timeout = timeout
@@ -29,12 +31,16 @@ class OpenRouterClient:
         reasoning_effort: str | None = None,
         verbosity: str | None = None,
     ) -> dict[str, Any]:
-        content = await self._complete(model, prompt, reasoning_effort=reasoning_effort, verbosity=verbosity)
+        content = await self._complete(
+            model, prompt, reasoning_effort=reasoning_effort, verbosity=verbosity
+        )
         try:
             return _parse_json_content(content)
         except json.JSONDecodeError:
             repair_prompt = f"{prompt}\n\nReturn only valid JSON matching the requested schema. Do not add markdown."
-            repaired = await self._complete(model, repair_prompt, reasoning_effort=reasoning_effort, verbosity=verbosity)
+            repaired = await self._complete(
+                model, repair_prompt, reasoning_effort=reasoning_effort, verbosity=verbosity
+            )
             return _parse_json_content(repaired)
 
     async def _complete(
@@ -44,7 +50,7 @@ class OpenRouterClient:
         reasoning_effort: str | None = None,
         verbosity: str | None = None,
     ) -> str:
-        payload = {
+        payload: dict[str, Any] = {
             "model": model,
             "messages": [{"role": "user", "content": prompt}],
         }
@@ -57,7 +63,7 @@ class OpenRouterClient:
         async with self._client() as client:
             response = await client.post("/chat/completions", json=payload)
             response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
+        return cast(str, response.json()["choices"][0]["message"]["content"])
 
     def _client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(
@@ -77,4 +83,4 @@ def _parse_json_content(content: str) -> dict[str, Any]:
     fenced = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL | re.IGNORECASE)
     if fenced:
         text = fenced.group(1).strip()
-    return json.loads(text)
+    return cast(dict[str, Any], json.loads(text))

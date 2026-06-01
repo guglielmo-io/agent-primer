@@ -2,6 +2,15 @@
 
 All notable changes to Agent Primer will be documented in this file.
 
+## Unreleased
+
+- Rebuilt Prompt Upgrade on researched LLM/coding-agent prompting best practices: weighted intent routing, a coding-optimized template (bias to action, anti-patterns, `rg`/`path:line`, narrow-to-broad verification), and an upgraded AI rewrite prompt.
+- Surfaced OpenRouter failures instead of silently falling back: when a key is configured but the AI call fails, the prompt-upgrade and repair flows return a clear warning.
+- Added deterministic dependency extraction from manifests (Python, Node, Go, Rust) into the context docs to reduce `AGENT_FILL` guesswork.
+- Added language-agnostic entry-point detection and broadened symbolic areas (routes, models/migrations, background jobs, auth) beyond the JavaScript ecosystem.
+- Hardened scanning against malformed manifests.
+- Added a `ruff` + `mypy --strict` quality gate and CI checks.
+
 ## 0.1.0 - 2026-05-22
 
 - Added local FastAPI GUI for creating repository context packs.

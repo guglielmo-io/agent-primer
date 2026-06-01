@@ -50,7 +50,9 @@ def test_upgrade_prompt_specializes_research_architecture_requests():
 
 
 def test_upgrade_prompt_does_not_force_proposals_for_writing_requests():
-    result = upgrade_prompt("Scrivimi un messaggio WhatsApp professionale per chiedere un aggiornamento.")
+    result = upgrade_prompt(
+        "Scrivimi un messaggio WhatsApp professionale per chiedere un aggiornamento."
+    )
 
     assert "senior communications editor" in result.upgraded_prompt
     assert "Final text" in result.upgraded_prompt
@@ -77,6 +79,30 @@ def test_upgrade_prompt_uses_decision_shape_without_fixed_proposal_count():
     assert "Recommended path" in result.upgraded_prompt
     assert "exactly 5 candidate approaches" not in result.upgraded_prompt
     assert result.score.ready is True
+
+
+def test_software_upgrade_encodes_coding_agent_best_practices():
+    result = upgrade_prompt("Fix the auth bug in the API and add a test.")
+
+    prompt = result.upgraded_prompt
+    # Bias to action, anti-patterns, tool + file:line conventions, verification ladder, outcome-first.
+    assert "reasonable" in prompt
+    assert "try/except" in prompt
+    assert "destructive git" in prompt
+    assert "`rg`" in prompt
+    assert "path:line" in prompt
+    assert "narrow-to-broad" in prompt
+    assert "Outcome first" in prompt
+    assert result.score.ready is True
+
+
+def test_intent_router_weights_dominant_signal_over_first_match():
+    # "write" would trip the writing branch first under a cascade, but the request
+    # is dominantly a decision ("decide", "should"); weighted routing must pick decision.
+    result = upgrade_prompt("Help me decide: should I write the migration myself or use a tool?")
+
+    assert "senior decision analyst" in result.upgraded_prompt
+    assert "senior communications editor" not in result.upgraded_prompt
 
 
 def test_revision_request_preserves_single_prompt_output_contract():

@@ -1,10 +1,10 @@
 from pathlib import Path
 
-from conftest import FIXTURES
 from fastapi.testclient import TestClient
 
 from agent_primer.app import _directory_picker_command, create_app
 from agent_primer.config import AppConfig, ConfigStore
+from conftest import FIXTURES
 
 
 def test_health_endpoint_returns_app_status():
@@ -27,7 +27,9 @@ def test_filesystem_picker_lists_directories_only(tmp_path):
     payload = response.json()
     assert payload["path"] == str(tmp_path)
     assert payload["parent"] == str(tmp_path.parent)
-    assert payload["directories"] == [{"name": "repo", "path": str(tmp_path / "repo"), "hidden": False}]
+    assert payload["directories"] == [
+        {"name": "repo", "path": str(tmp_path / "repo"), "hidden": False}
+    ]
 
 
 def test_filesystem_picker_rejects_files(tmp_path):
@@ -105,7 +107,10 @@ def test_native_directory_picker_allows_cancel(monkeypatch):
 
 def test_directory_picker_supports_linux_zenity(tmp_path, monkeypatch):
     monkeypatch.setattr("agent_primer.app.sys.platform", "linux")
-    monkeypatch.setattr("agent_primer.app.shutil.which", lambda name: "/usr/bin/zenity" if name == "zenity" else None)
+    monkeypatch.setattr(
+        "agent_primer.app.shutil.which",
+        lambda name: "/usr/bin/zenity" if name == "zenity" else None,
+    )
 
     command = _directory_picker_command(tmp_path)
 
@@ -114,7 +119,10 @@ def test_directory_picker_supports_linux_zenity(tmp_path, monkeypatch):
 
 def test_directory_picker_supports_macos_osascript(tmp_path, monkeypatch):
     monkeypatch.setattr("agent_primer.app.sys.platform", "darwin")
-    monkeypatch.setattr("agent_primer.app.shutil.which", lambda name: "/usr/bin/osascript" if name == "osascript" else None)
+    monkeypatch.setattr(
+        "agent_primer.app.shutil.which",
+        lambda name: "/usr/bin/osascript" if name == "osascript" else None,
+    )
 
     command = _directory_picker_command(tmp_path)
 
@@ -124,7 +132,9 @@ def test_directory_picker_supports_macos_osascript(tmp_path, monkeypatch):
 
 def test_directory_picker_supports_windows_powershell(tmp_path, monkeypatch):
     monkeypatch.setattr("agent_primer.app.sys.platform", "win32")
-    monkeypatch.setattr("agent_primer.app.shutil.which", lambda name: "powershell" if name == "powershell" else None)
+    monkeypatch.setattr(
+        "agent_primer.app.shutil.which", lambda name: "powershell" if name == "powershell" else None
+    )
 
     command = _directory_picker_command(tmp_path)
 
@@ -144,12 +154,15 @@ def test_existing_setup_is_template_only_and_does_not_call_ai(tmp_path, monkeypa
 
     monkeypatch.setattr("agent_primer.openrouter.OpenRouterClient.complete_json", fail_if_called)
 
-    response = client.post("/api/setup/apply", json={
-        "mode": "existing_project",
-        "target_path": str(target),
-        "openrouter_model": "google/gemini-3.5-flash",
-        "overwrite": False,
-    })
+    response = client.post(
+        "/api/setup/apply",
+        json={
+            "mode": "existing_project",
+            "target_path": str(target),
+            "openrouter_model": "google/gemini-3.5-flash",
+            "overwrite": False,
+        },
+    )
 
     payload = response.json()
     assert response.status_code == 200
@@ -165,12 +178,15 @@ def test_existing_setup_ignores_overwrite_flag(tmp_path):
     (target / "AGENTS.md").write_text("human-authored context", encoding="utf-8")
     client = TestClient(create_app(config_store=ConfigStore(tmp_path / "config.json")))
 
-    response = client.post("/api/setup/apply", json={
-        "mode": "existing_project",
-        "target_path": str(target),
-        "openrouter_model": "google/gemini-3.5-flash",
-        "overwrite": True,
-    })
+    response = client.post(
+        "/api/setup/apply",
+        json={
+            "mode": "existing_project",
+            "target_path": str(target),
+            "openrouter_model": "google/gemini-3.5-flash",
+            "overwrite": True,
+        },
+    )
 
     payload = response.json()
     assert response.status_code == 200
@@ -181,14 +197,17 @@ def test_existing_setup_ignores_overwrite_flag(tmp_path):
 def test_new_project_setup_returns_validation_prompt_without_score(tmp_path):
     client = TestClient(create_app(config_store=ConfigStore(tmp_path / "config.json")))
 
-    response = client.post("/api/setup/apply", json={
-        "mode": "new_project",
-        "target_path": str(tmp_path),
-        "project_name": "new_app",
-        "raw_idea": "A focused developer tool.",
-        "openrouter_model": "google/gemini-3.5-flash",
-        "overwrite": False,
-    })
+    response = client.post(
+        "/api/setup/apply",
+        json={
+            "mode": "new_project",
+            "target_path": str(tmp_path),
+            "project_name": "new_app",
+            "raw_idea": "A focused developer tool.",
+            "openrouter_model": "google/gemini-3.5-flash",
+            "overwrite": False,
+        },
+    )
 
     payload = response.json()
     assert response.status_code == 200
@@ -216,16 +235,21 @@ def test_new_project_ai_draft_ignores_returned_project_name(tmp_path, monkeypatc
             "recommended_prompt": "Compare 5 proposals before implementation.",
         }
 
-    monkeypatch.setattr("agent_primer.openrouter.OpenRouterClient.complete_json", fake_complete_json)
+    monkeypatch.setattr(
+        "agent_primer.openrouter.OpenRouterClient.complete_json", fake_complete_json
+    )
 
-    response = client.post("/api/setup/apply", json={
-        "mode": "new_project",
-        "target_path": str(tmp_path),
-        "project_name": "new_app",
-        "raw_idea": "A focused developer tool.",
-        "openrouter_model": "google/gemini-3.5-flash",
-        "overwrite": False,
-    })
+    response = client.post(
+        "/api/setup/apply",
+        json={
+            "mode": "new_project",
+            "target_path": str(tmp_path),
+            "project_name": "new_app",
+            "raw_idea": "A focused developer tool.",
+            "openrouter_model": "google/gemini-3.5-flash",
+            "overwrite": False,
+        },
+    )
 
     payload = response.json()
     assert response.status_code == 200
@@ -241,21 +265,28 @@ def test_new_project_falls_back_to_local_draft_when_openrouter_fails(tmp_path, m
     async def fail_complete_json(*args, **kwargs):
         raise RuntimeError("OpenRouter unavailable")
 
-    monkeypatch.setattr("agent_primer.openrouter.OpenRouterClient.complete_json", fail_complete_json)
+    monkeypatch.setattr(
+        "agent_primer.openrouter.OpenRouterClient.complete_json", fail_complete_json
+    )
 
-    response = client.post("/api/setup/apply", json={
-        "mode": "new_project",
-        "target_path": str(tmp_path),
-        "project_name": "new_app",
-        "raw_idea": "A focused developer tool.",
-        "openrouter_model": "google/gemini-3.5-flash",
-        "overwrite": False,
-    })
+    response = client.post(
+        "/api/setup/apply",
+        json={
+            "mode": "new_project",
+            "target_path": str(tmp_path),
+            "project_name": "new_app",
+            "raw_idea": "A focused developer tool.",
+            "openrouter_model": "google/gemini-3.5-flash",
+            "overwrite": False,
+        },
+    )
 
     payload = response.json()
     assert response.status_code == 200
     assert "next_prompt" in payload
-    assert "Needs agent verification" in (tmp_path / "new_app" / "docs/ai/context.md").read_text(encoding="utf-8")
+    assert "Needs agent verification" in (tmp_path / "new_app" / "docs/ai/context.md").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_verify_returns_score_and_repair_prompt(tmp_path, monkeypatch):
@@ -288,12 +319,15 @@ def test_verify_returns_repair_prompt_for_uncompiled_template_context(tmp_path, 
     _copy_fixture(FIXTURES / "node_repo", target)
     client = TestClient(create_app(config_store=ConfigStore(tmp_path / "config.json")))
 
-    setup_response = client.post("/api/setup/apply", json={
-        "mode": "existing_project",
-        "target_path": str(target),
-        "openrouter_model": "google/gemini-3.5-flash",
-        "overwrite": False,
-    })
+    setup_response = client.post(
+        "/api/setup/apply",
+        json={
+            "mode": "existing_project",
+            "target_path": str(target),
+            "openrouter_model": "google/gemini-3.5-flash",
+            "overwrite": False,
+        },
+    )
     assert setup_response.status_code == 200
 
     response = client.post("/api/verify", json={"target_path": str(target)})
@@ -324,26 +358,37 @@ def test_verify_uses_openrouter_for_ai_assisted_repair_prompt(tmp_path, monkeypa
             },
         }
 
-    monkeypatch.setattr("agent_primer.openrouter.OpenRouterClient.complete_json", fake_complete_json)
+    monkeypatch.setattr(
+        "agent_primer.openrouter.OpenRouterClient.complete_json", fake_complete_json
+    )
 
-    setup_response = client.post("/api/setup/apply", json={
-        "mode": "existing_project",
-        "target_path": str(target),
-        "openrouter_model": "google/gemini-3.5-flash",
-        "overwrite": False,
-    })
+    setup_response = client.post(
+        "/api/setup/apply",
+        json={
+            "mode": "existing_project",
+            "target_path": str(target),
+            "openrouter_model": "google/gemini-3.5-flash",
+            "overwrite": False,
+        },
+    )
     assert setup_response.status_code == 200
 
-    response = client.post("/api/verify", json={
-        "target_path": str(target),
-        "openrouter_model": "google/gemini-3.5-flash",
-    })
+    response = client.post(
+        "/api/verify",
+        json={
+            "target_path": str(target),
+            "openrouter_model": "google/gemini-3.5-flash",
+        },
+    )
 
     payload = response.json()
     assert response.status_code == 200
     assert payload["repair_source"] == "ai"
     assert payload["repair_prompt"].startswith("AI repair prompt")
-    assert payload["repair_ai_review"]["summary"] == "AI prioritized context repair from scan and score."
+    assert (
+        payload["repair_ai_review"]["summary"]
+        == "AI prioritized context repair from scan and score."
+    )
     assert calls[0]["model"] == "google/gemini-3.5-flash"
     assert "Do not compile or edit the context files yourself" in calls[0]["prompt"]
     assert "Local deterministic repair prompt" in calls[0]["prompt"]
@@ -360,35 +405,49 @@ def test_verify_falls_back_to_local_repair_prompt_when_openrouter_fails(tmp_path
     async def fail_complete_json(*args, **kwargs):
         raise RuntimeError("OpenRouter unavailable")
 
-    monkeypatch.setattr("agent_primer.openrouter.OpenRouterClient.complete_json", fail_complete_json)
+    monkeypatch.setattr(
+        "agent_primer.openrouter.OpenRouterClient.complete_json", fail_complete_json
+    )
 
-    setup_response = client.post("/api/setup/apply", json={
-        "mode": "existing_project",
-        "target_path": str(target),
-        "openrouter_model": "google/gemini-3.5-flash",
-        "overwrite": False,
-    })
+    setup_response = client.post(
+        "/api/setup/apply",
+        json={
+            "mode": "existing_project",
+            "target_path": str(target),
+            "openrouter_model": "google/gemini-3.5-flash",
+            "overwrite": False,
+        },
+    )
     assert setup_response.status_code == 200
 
-    response = client.post("/api/verify", json={
-        "target_path": str(target),
-        "openrouter_model": "google/gemini-3.5-flash",
-    })
+    response = client.post(
+        "/api/verify",
+        json={
+            "target_path": str(target),
+            "openrouter_model": "google/gemini-3.5-flash",
+        },
+    )
 
     payload = response.json()
     assert response.status_code == 200
     assert payload["repair_source"] == "local_fallback"
     assert "AGENT_FILL" in payload["repair_prompt"]
     assert payload["repair_ai_review"] is None
+    # The fallback is no longer silent: the user is told the AI path failed.
+    assert payload["repair_warning"]
+    assert "google/gemini-3.5-flash" in payload["repair_warning"]
 
 
 def test_prompt_upgrade_endpoint_returns_single_prompt_and_score(tmp_path, monkeypatch):
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     client = TestClient(create_app(config_store=ConfigStore(tmp_path / "config.json")))
 
-    response = client.post("/api/prompt/upgrade", json={
-        "raw_prompt": "Create a launch plan for an AI product.",
-    })
+    response = client.post(
+        "/api/prompt/upgrade",
+        json={
+            "raw_prompt": "Create a launch plan for an AI product.",
+        },
+    )
 
     payload = response.json()
     assert response.status_code == 200
@@ -419,12 +478,17 @@ def test_prompt_upgrade_endpoint_uses_openrouter_when_key_is_configured(tmp_path
             },
         }
 
-    monkeypatch.setattr("agent_primer.openrouter.OpenRouterClient.complete_json", fake_complete_json)
+    monkeypatch.setattr(
+        "agent_primer.openrouter.OpenRouterClient.complete_json", fake_complete_json
+    )
 
-    response = client.post("/api/prompt/upgrade", json={
-        "raw_prompt": "Scrivimi un messaggio WhatsApp professionale.",
-        "openrouter_model": "google/gemini-3.5-flash",
-    })
+    response = client.post(
+        "/api/prompt/upgrade",
+        json={
+            "raw_prompt": "Scrivimi un messaggio WhatsApp professionale.",
+            "openrouter_model": "google/gemini-3.5-flash",
+        },
+    )
 
     payload = response.json()
     assert response.status_code == 200
@@ -433,7 +497,8 @@ def test_prompt_upgrade_endpoint_uses_openrouter_when_key_is_configured(tmp_path
     assert payload["upgraded_prompt"].startswith("AI-generated custom prompt")
     assert payload["ai_review"]["summary"] == "Intent-specific prompt generated by AI."
     assert calls[0]["model"] == "google/gemini-3.5-flash"
-    assert "Do not force one universal template" in calls[0]["prompt"]
+    assert "Adapt structure to intent" in calls[0]["prompt"]
+    assert "narrow-to-broad" in calls[0]["prompt"]
 
 
 def test_prompt_upgrade_endpoint_falls_back_locally_without_openrouter_key(tmp_path, monkeypatch):
@@ -445,10 +510,13 @@ def test_prompt_upgrade_endpoint_falls_back_locally_without_openrouter_key(tmp_p
 
     monkeypatch.setattr("agent_primer.openrouter.OpenRouterClient.complete_json", fail_if_called)
 
-    response = client.post("/api/prompt/upgrade", json={
-        "raw_prompt": "Scrivimi un messaggio WhatsApp professionale.",
-        "openrouter_model": "google/gemini-3.5-flash",
-    })
+    response = client.post(
+        "/api/prompt/upgrade",
+        json={
+            "raw_prompt": "Scrivimi un messaggio WhatsApp professionale.",
+            "openrouter_model": "google/gemini-3.5-flash",
+        },
+    )
 
     payload = response.json()
     assert response.status_code == 200
@@ -456,18 +524,53 @@ def test_prompt_upgrade_endpoint_falls_back_locally_without_openrouter_key(tmp_p
     assert payload["source"] == "local_fallback"
     assert "senior communications editor" in payload["upgraded_prompt"]
     assert payload["ai_review"] is None
+    # No key configured is a legitimate local run, not a failure: no warning.
+    assert payload["warning"] is None
+
+
+def test_prompt_upgrade_warns_when_key_configured_but_openrouter_fails(tmp_path, monkeypatch):
+    store = ConfigStore(tmp_path / "config.json")
+    store.save(AppConfig(openrouter_api_key="secret", last_model="google/gemini-3.5-flash"))
+    client = TestClient(create_app(config_store=store))
+
+    async def fail_complete_json(*args, **kwargs):
+        raise RuntimeError("404 model not found")
+
+    monkeypatch.setattr(
+        "agent_primer.openrouter.OpenRouterClient.complete_json", fail_complete_json
+    )
+
+    response = client.post(
+        "/api/prompt/upgrade",
+        json={
+            "raw_prompt": "Build a SaaS dashboard.",
+            "openrouter_model": "vendor/nonexistent-model",
+        },
+    )
+
+    payload = response.json()
+    assert response.status_code == 200
+    # Tool stays usable via the local prompt, but the failure is surfaced, not hidden.
+    assert payload["source"] == "local_fallback"
+    assert "principal software engineer" in payload["upgraded_prompt"]
+    assert payload["warning"]
+    assert "vendor/nonexistent-model" in payload["warning"]
+    assert "404 model not found" in payload["warning"]
 
 
 def test_prompt_revision_requires_openrouter_key(tmp_path, monkeypatch):
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     client = TestClient(create_app(config_store=ConfigStore(tmp_path / "config.json")))
 
-    response = client.post("/api/prompt/revise", json={
-        "raw_prompt": "Create a launch plan.",
-        "current_prompt": "Current prompt",
-        "revision_request": "Make it more rigorous.",
-        "openrouter_model": "google/gemini-3.5-flash",
-    })
+    response = client.post(
+        "/api/prompt/revise",
+        json={
+            "raw_prompt": "Create a launch plan.",
+            "current_prompt": "Current prompt",
+            "revision_request": "Make it more rigorous.",
+            "openrouter_model": "google/gemini-3.5-flash",
+        },
+    )
 
     assert response.status_code == 400
     assert "OpenRouter API key is missing" in response.json()["detail"]
@@ -481,16 +584,23 @@ def test_prompt_revision_endpoint_uses_openrouter(tmp_path, monkeypatch):
 
     async def fake_complete_json(self, model, prompt, **kwargs):
         calls.append({"model": model, "prompt": prompt, "kwargs": kwargs})
-        return {"upgraded_prompt": "Revised enterprise prompt with Quality checklist and Return one final answer."}
+        return {
+            "upgraded_prompt": "Revised enterprise prompt with Quality checklist and Return one final answer."
+        }
 
-    monkeypatch.setattr("agent_primer.openrouter.OpenRouterClient.complete_json", fake_complete_json)
+    monkeypatch.setattr(
+        "agent_primer.openrouter.OpenRouterClient.complete_json", fake_complete_json
+    )
 
-    response = client.post("/api/prompt/revise", json={
-        "raw_prompt": "Create a launch plan.",
-        "current_prompt": "Current prompt",
-        "revision_request": "Make it more rigorous.",
-        "openrouter_model": "google/gemini-3.5-flash",
-    })
+    response = client.post(
+        "/api/prompt/revise",
+        json={
+            "raw_prompt": "Create a launch plan.",
+            "current_prompt": "Current prompt",
+            "revision_request": "Make it more rigorous.",
+            "openrouter_model": "google/gemini-3.5-flash",
+        },
+    )
 
     payload = response.json()
     assert response.status_code == 200

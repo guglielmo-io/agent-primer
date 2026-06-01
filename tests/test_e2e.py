@@ -1,12 +1,15 @@
 from pathlib import Path
 
-from conftest import FIXTURES
 from agent_primer.context_pack import build_context_pack, build_existing_template_pack
 from agent_primer.models import AiContextDraft
-from agent_primer.prompt_compiler import compile_existing_fill_prompt, compile_new_project_validation_prompt
+from agent_primer.prompt_compiler import (
+    compile_existing_fill_prompt,
+    compile_new_project_validation_prompt,
+)
 from agent_primer.scanner import scan_repo
 from agent_primer.scoring import score_existing_context
 from agent_primer.writer import write_context_pack
+from conftest import FIXTURES
 
 
 def test_existing_repo_setup_flow_writes_templates_and_fill_prompt(tmp_path: Path):

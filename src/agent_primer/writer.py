@@ -7,7 +7,9 @@ from pathlib import Path
 from agent_primer.models import ContextPack, WriteAction, WriteResult
 
 
-def plan_writes(target: Path, pack: ContextPack, api_key: str | None = None, overwrite: bool = False) -> list[WriteAction]:
+def plan_writes(
+    target: Path, pack: ContextPack, api_key: str | None = None, overwrite: bool = False
+) -> list[WriteAction]:
     actions: list[WriteAction] = []
     for relative_path in sorted(pack.files):
         path = target / relative_path
@@ -36,7 +38,11 @@ def write_context_pack(target: Path, pack: ContextPack, overwrite: bool = False)
         destination.write_text(pack.files[action.path], encoding="utf-8")
         updated_files.append(action.path)
 
-    return WriteResult(actions=actions, backup_path=str(backup_path) if backup_path else None, updated_files=updated_files)
+    return WriteResult(
+        actions=actions,
+        backup_path=str(backup_path) if backup_path else None,
+        updated_files=updated_files,
+    )
 
 
 def _backup_path(target: Path) -> Path:

@@ -49,3 +49,21 @@ def test_existing_template_pack_contains_agent_fill_contract():
     assert "AGENT_FILL" in joined
     assert "npm test" in pack.files["docs/ai/verification.md"]
     assert "Do not guess" in joined
+
+
+def test_existing_template_pack_renders_detected_dependencies_and_entry_points():
+    scan = RepoScan(
+        root_path="/repo",
+        top_level_dirs=["src"],
+        root_files=["pyproject.toml"],
+        manifest_files=["pyproject.toml"],
+        dependencies={"python": ["fastapi", "pydantic"]},
+        entry_points=["src/app/main.py"],
+    )
+
+    pack = build_existing_template_pack(scan)
+
+    context = pack.files["docs/ai/context.md"]
+    assert "## Detected Dependencies" in context
+    assert "- python: fastapi, pydantic" in context
+    assert "src/app/main.py" in pack.files["docs/ai/repo-map.md"]

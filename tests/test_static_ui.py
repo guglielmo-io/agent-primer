@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -34,7 +33,7 @@ def test_prompt_upgrade_mode_has_dedicated_fields_and_no_target_path():
     assert html.index('id="revisionFields"') > html.index('id="promptOutput"')
     assert "Edit with Request" in html
     assert "Regenerate with Request" not in html
-    assert 'els.targetPathRow.hidden = isPromptUpgrade' in app_js
+    assert "els.targetPathRow.hidden = isPromptUpgrade" in app_js
     assert "const hasPromptUpgradeResult = isPromptUpgrade" in app_js
     assert "els.result.hidden = isPromptUpgrade ? !hasPromptUpgradeResult : !isVerify" in app_js
     assert "if (isPromptUpgrade) {\n    els.revisionFields.hidden = true;\n  }" in app_js

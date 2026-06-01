@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 DEFAULT_MODEL = "google/gemini-3.5-flash"
 
 MODEL_PRESETS = [
@@ -41,7 +40,7 @@ def model_request_options(model_id: str) -> dict[str, str]:
     for preset in MODEL_PRESETS:
         if preset["id"] != model_id:
             continue
-        options = {}
+        options: dict[str, str] = {}
         for key in ("reasoning_effort", "verbosity"):
             if key in preset:
                 options[key] = preset[key]

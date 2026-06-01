@@ -75,10 +75,15 @@ function setResult(payload) {
     els.result.textContent = JSON.stringify({
       message: payload.message,
       source: payload.source || null,
+      warning: payload.warning || null,
       ai_review: payload.ai_review || null,
       score: payload.score,
     }, null, 2);
-    setStatus(payload.score?.ready ? "Prompt ready" : "Prompt upgraded", payload.score?.ready ? "ready" : "error");
+    if (payload.warning) {
+      setStatus(payload.warning, "error");
+    } else {
+      setStatus(payload.score?.ready ? "Prompt ready" : "Prompt upgraded", payload.score?.ready ? "ready" : "error");
+    }
     return;
   }
   els.result.hidden = !isVerify;
@@ -96,6 +101,7 @@ function setResult(payload) {
   els.result.textContent = JSON.stringify({
     message: payload.message,
     repair_source: payload.repair_source || null,
+    repair_warning: payload.repair_warning || null,
     repair_ai_review: payload.repair_ai_review || null,
     score: payload.score,
   }, null, 2);
@@ -109,7 +115,9 @@ function setResult(payload) {
   if (!useRepair) {
     els.promptOutput.value = "Context score is ready. No repair prompt is needed.";
   }
-  if (payload.score) {
+  if (payload.repair_warning) {
+    setStatus(payload.repair_warning, "error");
+  } else if (payload.score) {
     setStatus(payload.score.ready ? "Ready" : "Needs repair", payload.score.ready ? "ready" : "error");
   }
 }

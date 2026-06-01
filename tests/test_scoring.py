@@ -1,9 +1,7 @@
-from pathlib import Path
-
-from conftest import FIXTURES
 from agent_primer.context_pack import build_context_pack, build_existing_template_pack
 from agent_primer.models import AiContextDraft, RepoScan
 from agent_primer.scoring import score_context_pack, score_existing_context
+from conftest import FIXTURES
 
 
 def test_complete_pack_scores_ready():
@@ -38,7 +36,11 @@ def test_missing_symbolic_repo_map_gets_actionable_finding():
         top_level_dirs=["src"],
         commands={"test": "pnpm test"},
         symbolic_areas=[
-            {"name": "Auth Boundary", "paths": ["src/middleware.ts"], "evidence": ["src/middleware.ts"]},
+            {
+                "name": "Auth Boundary",
+                "paths": ["src/middleware.ts"],
+                "evidence": ["src/middleware.ts"],
+            },
         ],
     )
     pack = build_context_pack(scan, AiContextDraft.example(project_name="Example"))
@@ -99,7 +101,11 @@ def test_scoring_accepts_executable_command_variants_and_ignores_dev_scripts():
             "mcp-servers/posthog:dev": "npm --prefix mcp-servers/posthog run dev",
         },
         symbolic_areas=[
-            {"name": "Test Surface", "paths": ["tests/test_config.py"], "evidence": ["tests/test_config.py"]},
+            {
+                "name": "Test Surface",
+                "paths": ["tests/test_config.py"],
+                "evidence": ["tests/test_config.py"],
+            },
         ],
     )
     pack = build_context_pack(scan, AiContextDraft.example(project_name="Example"))
@@ -193,7 +199,9 @@ def test_scoring_does_not_flag_generic_marker_inside_repo_specific_identifier():
         commands={"test": "pytest"},
     )
     pack = build_context_pack(scan, AiContextDraft.example(project_name="Example"))
-    pack.files["docs/ai/constraints.md"] += "\n- Keep TODO_DEFAULT_REMINDER_TIME as the documented env-style constant name.\n"
+    pack.files["docs/ai/constraints.md"] += (
+        "\n- Keep TODO_DEFAULT_REMINDER_TIME as the documented env-style constant name.\n"
+    )
 
     score = score_context_pack(pack, scan)
 
@@ -208,7 +216,9 @@ def test_scoring_does_not_flag_lowercase_todo_cli_argument_as_generic_marker():
         commands={"test": "pytest"},
     )
     pack = build_context_pack(scan, AiContextDraft.example(project_name="Example"))
-    pack.files["docs/ai/verification.md"] += '\n- Smoke command: `tools/brain write-decision --type todo --text "take Zoloft"`.\n'
+    pack.files["docs/ai/verification.md"] += (
+        '\n- Smoke command: `tools/brain write-decision --type todo --text "take Zoloft"`.\n'
+    )
 
     score = score_context_pack(pack, scan)
 

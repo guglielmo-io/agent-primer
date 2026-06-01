@@ -4,7 +4,6 @@ from pathlib import Path
 
 from agent_primer.models import AiContextDraft, ContextPack, RepoScan
 
-
 REQUIRED_FILES = [
     "AGENTS.md",
     "docs/ai/product.md",
@@ -39,8 +38,14 @@ def build_existing_template_pack(scan: RepoScan) -> ContextPack:
         "docs/ai/context.md": _context_template(scan),
         "docs/ai/architecture.md": _architecture_template(scan),
         "docs/ai/verification.md": _verification_template(scan),
-        "docs/ai/constraints.md": _agent_fill_doc("Constraints", "Identify non-negotiable product, technical, security, deployment, and compatibility constraints."),
-        "docs/ai/risks.md": _agent_fill_doc("Risks", "Identify the highest-risk failure modes for future coding agents and how to verify them."),
+        "docs/ai/constraints.md": _agent_fill_doc(
+            "Constraints",
+            "Identify non-negotiable product, technical, security, deployment, and compatibility constraints.",
+        ),
+        "docs/ai/risks.md": _agent_fill_doc(
+            "Risks",
+            "Identify the highest-risk failure modes for future coding agents and how to verify them.",
+        ),
         "docs/ai/repo-map.md": _repo_map_template(scan),
     }
     return ContextPack(files=files)
@@ -80,8 +85,8 @@ def _product_template(project_name: str, scan: RepoScan) -> str:
 {_agent_fill("Identify primary users, core workflows, and business-critical outcomes from repository evidence.")}
 
 ## Evidence
-- README files: {', '.join(scan.readme_files) or 'Not detected'}
-- Root files: {', '.join(scan.root_files) or 'Not detected'}
+- README files: {", ".join(scan.readme_files) or "Not detected"}
+- Root files: {", ".join(scan.root_files) or "Not detected"}
 """
 
 
@@ -106,15 +111,18 @@ def _context_template(scan: RepoScan) -> str:
 {scan.root_path}
 
 ## Detected Evidence
-- Root files: {', '.join(scan.root_files) or 'Not detected'}
-- Manifests: {', '.join(scan.manifest_files) or 'Not detected'}
-- CI files: {', '.join(scan.ci_files) or 'Not detected'}
-- Environment examples: {', '.join(scan.env_examples) or 'Not detected'}
-- Docker files: {', '.join(scan.docker_files) or 'Not detected'}
-- Language hints: {', '.join(scan.language_hints) or 'Not detected'}
+- Root files: {", ".join(scan.root_files) or "Not detected"}
+- Manifests: {", ".join(scan.manifest_files) or "Not detected"}
+- CI files: {", ".join(scan.ci_files) or "Not detected"}
+- Environment examples: {", ".join(scan.env_examples) or "Not detected"}
+- Docker files: {", ".join(scan.docker_files) or "Not detected"}
+- Language hints: {", ".join(scan.language_hints) or "Not detected"}
+
+## Detected Dependencies
+{_dependencies_md(scan)}
 
 ## Stack
-{_agent_fill("Replace this section with verified languages, frameworks, runtimes, storage, queues, and external services. Do not guess.")}
+{_agent_fill("Confirm and complete the stack from the detected dependencies above plus runtimes, storage, queues, and external services. Do not guess beyond the evidence.")}
 
 ## Local Development
 {_agent_fill("Describe install, run, env setup, seed, migration, and local service requirements with exact commands where verified.")}
@@ -132,13 +140,16 @@ def _context_md(scan: RepoScan, draft: AiContextDraft) -> str:
 ## Stack
 {stack}
 
+## Detected Dependencies
+{_dependencies_md(scan)}
+
 ## Commands
 {commands}
 
 ## Evidence
-- Root files: {', '.join(scan.root_files) or 'Not detected'}
-- Manifests: {', '.join(scan.manifest_files) or 'Not detected'}
-- CI files: {', '.join(scan.ci_files) or 'Not detected'}
+- Root files: {", ".join(scan.root_files) or "Not detected"}
+- Manifests: {", ".join(scan.manifest_files) or "Not detected"}
+- CI files: {", ".join(scan.ci_files) or "Not detected"}
 """
 
 
@@ -191,16 +202,19 @@ def _repo_map_template(scan: RepoScan) -> str:
     return f"""# Repo Map
 
 ## Top-Level Directories
-{_bullets(scan.top_level_dirs or ['Not detected'])}
+{_bullets(scan.top_level_dirs or ["Not detected"])}
 
 ## Source Directories
-{_bullets(scan.source_dirs or ['Not detected'])}
+{_bullets(scan.source_dirs or ["Not detected"])}
 
 ## Test Directories
-{_bullets(scan.test_dirs or ['Not detected'])}
+{_bullets(scan.test_dirs or ["Not detected"])}
 
 ## Critical Files
-{_bullets(scan.critical_files or scan.manifest_files or scan.root_files[:5] or ['Not detected'])}
+{_bullets(scan.critical_files or scan.manifest_files or scan.root_files[:5] or ["Not detected"])}
+
+## Entry Points
+{_entry_points_md(scan)}
 
 ## Symbolic Areas
 {_symbolic_area_md(scan)}
@@ -211,22 +225,29 @@ def _repo_map_template(scan: RepoScan) -> str:
 
 
 def _repo_map_md(scan: RepoScan, draft: AiContextDraft) -> str:
-    source_dirs = scan.source_dirs or [name for name in scan.top_level_dirs if name in {"src", "app", "lib", "packages"}]
-    test_dirs = scan.test_dirs or [name for name in scan.top_level_dirs if name in {"test", "tests", "__tests__"}]
+    source_dirs = scan.source_dirs or [
+        name for name in scan.top_level_dirs if name in {"src", "app", "lib", "packages"}
+    ]
+    test_dirs = scan.test_dirs or [
+        name for name in scan.top_level_dirs if name in {"test", "tests", "__tests__"}
+    ]
     critical_files = scan.critical_files or scan.manifest_files or scan.root_files[:5]
     return f"""# Repo Map
 
 ## Top-Level Directories
-{_bullets(scan.top_level_dirs or ['Not detected'])}
+{_bullets(scan.top_level_dirs or ["Not detected"])}
 
 ## Source Directories
-{_bullets(source_dirs or ['Not detected'])}
+{_bullets(source_dirs or ["Not detected"])}
 
 ## Test Directories
-{_bullets(test_dirs or ['Not detected'])}
+{_bullets(test_dirs or ["Not detected"])}
 
 ## Critical Files
-{_bullets(critical_files or ['Not detected'])}
+{_bullets(critical_files or ["Not detected"])}
+
+## Entry Points
+{_entry_points_md(scan)}
 
 ## Symbolic Areas
 {_symbolic_area_md(scan)}
@@ -249,7 +270,7 @@ def _agent_fill_doc(title: str, instruction: str) -> str:
 def _list_doc(title: str, items: list[str]) -> str:
     return f"""# {title}
 
-{_bullets(items or ['Not detected'])}
+{_bullets(items or ["Not detected"])}
 
 ## Evidence
 - Generated from repository scan and setup analysis.
@@ -264,6 +285,19 @@ def _dict_bullets(items: dict[str, str]) -> str:
     if not items:
         return "- Not detected"
     return "\n".join(f"- {key}: `{value}`" for key, value in sorted(items.items()))
+
+
+def _dependencies_md(scan: RepoScan) -> str:
+    if not scan.dependencies:
+        return "- Not detected"
+    return "\n".join(
+        f"- {ecosystem}: {', '.join(names)}"
+        for ecosystem, names in sorted(scan.dependencies.items())
+    )
+
+
+def _entry_points_md(scan: RepoScan) -> str:
+    return _bullets(scan.entry_points or ["Not detected"])
 
 
 def _agent_fill(instruction: str) -> str:

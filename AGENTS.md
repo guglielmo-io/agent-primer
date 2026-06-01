@@ -14,6 +14,8 @@ Agent Primer is a local-first GUI that prepares repositories for AI coding agent
 ## Commands
 
 - Run Python tests with `pytest -q`.
+- Lint with `ruff check .` and check formatting with `ruff format --check .`.
+- Type-check with `mypy src`.
 - Check frontend JavaScript with `node --check web/app.js`.
 - Run the app with `agent-primer` after installing with `pip install -e ".[dev]"`.
 

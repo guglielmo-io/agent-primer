@@ -11,6 +11,9 @@ class PromptUpgradeResult(BaseModel):
     score: ScoreBreakdown
     source: str = "local_fallback"
     ai_review: dict[str, object] | None = None
+    # Set only when an OpenRouter key was configured but the AI call failed and we
+    # fell back to the local prompt, so the UI can tell the user instead of pretending success.
+    warning: str | None = None
 
 
 def upgrade_prompt(raw_prompt: str) -> PromptUpgradeResult:
@@ -23,35 +26,32 @@ def upgrade_prompt(raw_prompt: str) -> PromptUpgradeResult:
 
 
 def build_ai_prompt_upgrade_request(raw_prompt: str, local_baseline: str) -> str:
-    return f"""You are a principal prompt architect, domain strategist, and execution-quality reviewer.
+    return f"""You are a principal prompt architect and context engineer for latest-generation LLMs and coding agents.
 
-Mission:
-Generate the strongest possible single prompt for the raw user request below. The prompt must be custom to the request intent, not a fixed reusable template.
+# Mission
+Rewrite the raw user request below into the single strongest prompt to paste into a capable AI assistant or coding agent. The prompt must be custom to the request's real intent, not a fixed template. Optimize the prompt so the downstream agent does the work end-to-end; you are not solving the task here.
 
-Raw user request:
+# Inputs
+## Raw user request
 {_block(raw_prompt)}
 
-Local baseline prompt:
+## Local baseline prompt (already intent-classified; improve on it and never regress its hard rules)
 {_block(local_baseline)}
 
-Universal prompt-quality rules:
-- Infer the real objective, audience, constraints, expected output, success criteria, and hidden risks.
-- Do not force one universal template.
-- Choose the structure that fits the request. Do not force proposals, matrices, long workflows, research, or scoring when they are not useful.
-- Use exactly 5 proposals only when the request is strategic, architectural, product-shaping, or materially benefits from comparing alternatives.
-- For software work, include repository inspection, minimal-change execution, tests, verification, and final evidence.
-- For writing work, prioritize final usable copy and tone control.
-- For explanations, prioritize directness, examples, and caveats without unnecessary framework.
-- For decisions, include criteria and alternatives only when they materially change the recommendation.
-- For requests involving current facts, tools, laws, prices, benchmarks, public repositories, or model capabilities, instruct the target AI to use current authoritative sources and separate evidence from inference.
-- Preserve the user's original intent and important wording. Do not invent missing facts.
-- Keep the final prompt compatible with any capable AI assistant or coding agent.
-- The final prompt should be as short as possible while still protecting quality.
+# Prompt-engineering rules (apply the ones that fit the intent)
+- Right altitude: specific enough to guide behavior, flexible enough to stay robust. Avoid both brittle hardcoding and vague generalities.
+- Be compact. Reasoning degrades as prompts bloat; keep only what changes the output. Cut filler; never pad to look thorough.
+- Structure with clear Markdown sections (Role, Context, Task, Constraints, Output format, Verification) so any model parses it. Reserve XML tags for when the user explicitly targets Claude. Keep the user's own content in its own block, separated from instructions.
+- Infer objective, audience, constraints, expected output, success criteria, and hidden risks. Preserve the user's wording and intent; never invent facts.
+- Adapt structure to intent. Use exactly 5 scored proposals only for strategic/architectural decisions. Do not force proposals, matrices, or long workflows on simple tasks.
+- For coding/software work, the prompt must instruct the agent to: act as a senior engineer with a bias to action (proceed on reasonable, stated assumptions; ask only if truly blocked); inspect relevant files, tests, and manifests and follow existing patterns first; search with `rg` and reference code as `path:line`; make the smallest correct change with no unrelated refactors; avoid anti-patterns (broad try/except, silent failures, destructive git, secrets, dead code, unsafe casts); plan only for substantial work; verify narrow-to-broad (targeted check, then build/type-check/tests) and never claim done without evidence; lead with the outcome and keep preamble minimal.
+- For research and decisions, require current authoritative sources, separate evidence from inference, and mark unverifiable assumptions.
+- For writing, prioritize final usable copy and tone control.
+- Always include a verification or quality bar proportional to the task and a clear output shape.
+- The final prompt is one block, as short as possible while protecting quality, compatible with any capable agent.
 
-Quality analysis:
-- Analyze the absolute quality of your upgraded prompt before returning.
-- Check intent fit, specificity, constraints, output shape, ambiguity handling, verification/research needs, and risk control.
-- Revise the prompt internally if the analysis finds a weakness.
+# Self-review before returning
+Check intent fit, specificity, right altitude, constraint coverage, output shape, ambiguity handling, verification, and compactness. Revise internally if any is weak.
 
 Return JSON only with exactly these keys:
 {{
@@ -85,7 +85,9 @@ def score_prompt(prompt: str) -> ScoreBreakdown:
     total = sum(categories.values())
     if any(finding.severity == "P0" for finding in findings):
         total = min(total, 69)
-    return ScoreBreakdown(total=total, ready=total >= 85 and not findings, categories=categories, findings=findings)
+    return ScoreBreakdown(
+        total=total, ready=total >= 85 and not findings, categories=categories, findings=findings
+    )
 
 
 def build_prompt_revision_request(
@@ -94,10 +96,13 @@ def build_prompt_revision_request(
     revision_request: str,
     score: ScoreBreakdown,
 ) -> str:
-    findings = "\n".join(
-        f"- {finding.severity} {finding.code}: {finding.message}. {finding.recommended_action}."
-        for finding in score.findings
-    ) or "- No current findings."
+    findings = (
+        "\n".join(
+            f"- {finding.severity} {finding.code}: {finding.message}. {finding.recommended_action}."
+            for finding in score.findings
+        )
+        or "- No current findings."
+    )
     return f"""You are an expert prompt architect.
 
 Revise the current upgraded prompt according to the user's revision request.
@@ -127,80 +132,146 @@ Revision request:
 """
 
 
+_RESEARCH_SIGNALS = (
+    "research",
+    "ricerca",
+    "github",
+    "repo",
+    "repository",
+    "viral",
+    "benchmark",
+    "compare",
+    "confront",
+)
+_ARCHITECTURE_SIGNALS = (
+    "integr",
+    "approach",
+    "approccio",
+    "system",
+    "sistema",
+    "architecture",
+    "architettura",
+    "wiki",
+)
+_SOFTWARE_ACTION_SIGNALS = (
+    "build",
+    "create",
+    "implement",
+    "fix",
+    "debug",
+    "refactor",
+    "test",
+    "ship",
+    "sviluppa",
+    "crea",
+    "implementa",
+    "fai",
+    "fixa",
+    "sistema",
+    "correggi",
+    "debugga",
+)
+_SOFTWARE_DOMAIN_SIGNALS = (
+    "app",
+    "api",
+    "bug",
+    "code",
+    "codice",
+    "repo",
+    "repository",
+    "frontend",
+    "backend",
+    "database",
+    "dashboard",
+    "component",
+    "workflow",
+    "ci",
+    "test",
+)
+_WRITING_SIGNALS = (
+    "write",
+    "draft",
+    "rewrite",
+    "email",
+    "message",
+    "copy",
+    "scrivi",
+    "riscrivi",
+    "messaggio",
+    "mail",
+    "whatsapp",
+    "linkedin",
+)
+_EXPLANATION_SIGNALS = (
+    "explain",
+    "spiega",
+    "what does",
+    "how does",
+    "come funziona",
+    "cosa vuol dire",
+    "perché",
+    "why",
+)
+_DECISION_SIGNALS = (
+    "should",
+    "better",
+    "best",
+    "choose",
+    "decide",
+    "conviene",
+    "meglio",
+    "migliore",
+    "sostituire",
+    "replace",
+    "worth",
+)
+
+
 def _deterministic_upgrade(raw_prompt: str) -> str:
     clean = raw_prompt.strip()
-    lower = clean.lower()
-    if _is_research_architecture_request(lower):
+    intent = _classify_intent(clean.lower())
+    if intent == "research":
         return _research_architecture_upgrade(clean)
-    if _is_software_execution_request(lower):
+    if intent == "software":
         return _software_execution_upgrade(clean)
-    if _is_writing_request(lower):
+    if intent == "writing":
         return _writing_upgrade(clean)
-    if _is_explanation_request(lower):
+    if intent == "explanation":
         return _explanation_upgrade(clean)
-    if _is_decision_request(lower):
+    if intent == "decision":
         return _decision_upgrade(clean)
     return _general_execution_upgrade(clean)
 
 
-def _is_research_architecture_request(lower: str) -> bool:
-    research_signals = ("research", "ricerca", "github", "repo", "repository", "viral", "benchmark", "compare", "confront")
-    architecture_signals = ("integr", "approach", "approccio", "system", "sistema", "architecture", "architettura", "wiki")
-    return any(signal in lower for signal in research_signals) and any(signal in lower for signal in architecture_signals)
+def _classify_intent(lower: str) -> str:
+    """Score every intent by signal strength and pick the strongest.
+
+    Weighted scoring replaces a first-match cascade so an overlapping request
+    (e.g. a decision phrased with an incidental software noun) routes to the
+    intent it best fits, not to whichever branch happened to be checked first.
+    Research and software require a combined signal (action + domain) to avoid
+    over-triggering on a single keyword. Ties favor the more specific intent
+    via insertion order (research, software, then single-signal intents).
+    """
+    research = _count(lower, _RESEARCH_SIGNALS)
+    architecture = _count(lower, _ARCHITECTURE_SIGNALS)
+    software_action = _count(lower, _SOFTWARE_ACTION_SIGNALS)
+    software_domain = _count(lower, _SOFTWARE_DOMAIN_SIGNALS)
+    scores = {
+        "research": (research + architecture) if research and architecture else 0,
+        "software": (software_action + software_domain)
+        if software_action and software_domain
+        else 0,
+        "writing": _count(lower, _WRITING_SIGNALS),
+        "explanation": _count(lower, _EXPLANATION_SIGNALS),
+        "decision": _count(lower, _DECISION_SIGNALS),
+    }
+    best = max(scores, key=lambda intent: scores[intent])
+    return best if scores[best] > 0 else "general"
 
 
-def _is_software_execution_request(lower: str) -> bool:
-    action_signals = (
-        "build",
-        "create",
-        "implement",
-        "fix",
-        "debug",
-        "refactor",
-        "test",
-        "ship",
-        "sviluppa",
-        "crea",
-        "implementa",
-        "fai",
-        "fixa",
-        "sistema",
-        "correggi",
-        "debugga",
-    )
-    software_signals = (
-        "app",
-        "api",
-        "bug",
-        "code",
-        "codice",
-        "repo",
-        "repository",
-        "frontend",
-        "backend",
-        "database",
-        "dashboard",
-        "component",
-        "workflow",
-        "ci",
-        "test",
-    )
-    return any(signal in lower for signal in action_signals) and any(signal in lower for signal in software_signals)
-
-
-def _is_writing_request(lower: str) -> bool:
-    action_signals = ("write", "draft", "rewrite", "email", "message", "copy", "scrivi", "riscrivi", "messaggio", "mail", "whatsapp", "linkedin")
-    return any(signal in lower for signal in action_signals)
-
-
-def _is_explanation_request(lower: str) -> bool:
-    explanation_signals = ("explain", "spiega", "what does", "how does", "come funziona", "cosa vuol dire", "perché", "why")
-    return any(signal in lower for signal in explanation_signals)
-
-
-def _is_decision_request(lower: str) -> bool:
-    decision_signals = ("should", "better", "best", "choose", "decide", "conviene", "meglio", "migliore", "sostituire", "replace", "worth")
-    return any(signal in lower for signal in decision_signals)
+def _count(lower: str, signals: tuple[str, ...]) -> int:
+    return sum(1 for signal in signals if signal in lower)
 
 
 def _research_architecture_upgrade(clean: str) -> str:
@@ -255,40 +326,45 @@ Return one final answer in the most useful format for the inferred task."""
 def _software_execution_upgrade(clean: str) -> str:
     return f"""You are a principal software engineer and execution-quality reviewer.
 
-Mission:
-Execute the user's software request below with the smallest correct change and provide verified evidence. Do not merely discuss the request.
+# Role
+Act as a senior engineer empowered to gather context, plan, and execute end-to-end. Bias to action: proceed on reasonable, explicitly stated assumptions instead of waiting for approval. Ask at most one question, and only if a missing detail truly blocks correct work.
 
-Original user request:
+# Task
+Execute the user's software request below with the smallest correct change and return verified evidence. Do not merely discuss the request.
+
+## Original user request
 {_block(clean)}
 
-Grounding rules:
-- Infer the real engineering objective, affected surface, constraints, and success criteria from the request.
-- Inspect the relevant repository files, tests, manifests, configuration, and existing patterns before changing anything.
-- Ask at most one concise clarifying question only if a missing detail blocks a correct implementation. Otherwise, state assumptions and proceed.
-- Preserve existing behavior and user changes. Do not perform unrelated refactors.
-- Treat external input, generated text, secrets, and credentials as untrusted.
+# Gather context first
+- Inspect the relevant files, tests, manifests, config, and existing patterns before editing. Search with `rg`, not brute-force find. Reference code as `path/to/file.py:42`.
+- Decide upfront which files you need and read them before acting; mirror the surrounding code's style, naming, and idioms.
+- If this is a bug, reproduce or isolate the root cause before fixing when practical. Fix the cause, not the symptom.
 
-Execution workflow:
-1. Identify the smallest relevant files, commands, and failure or success signal.
-2. If this is a bug, reproduce or isolate the root cause before fixing when practical.
-3. Implement the minimal change that satisfies the request and follows local project patterns.
-4. Add or update focused tests when the behavior can reasonably be captured.
-5. Run the narrowest useful verification first, then any broader check needed for the touched surface.
-6. Self-review the diff for regressions, security issues, missing tests, and unintended scope.
+# Constraints (hard)
+- Make the smallest correct change that satisfies the request. No unrelated refactors. Preserve existing behavior and user changes.
+- Avoid anti-patterns: no broad try/except that hides failures, no silent fallbacks, no destructive git commands, no secrets or placeholders, no dead code, no unsafe casts.
+- Treat external input, generated text, and credentials as untrusted. Add a focused regression test when the behavior can be captured.
 
-Output format:
-- Direct result summary.
-- Files changed and why.
-- Verification commands run with outcomes.
-- Remaining risks, blockers, or follow-up checks.
+# Workflow
+1. Restate the real objective in one sentence and scope the smallest relevant surface.
+2. Skip planning for trivial tasks; for substantial or multi-file work, outline the plan first and keep it updated.
+3. Implement the minimal change following local conventions.
+4. Verify narrow-to-broad: run the most targeted check first, then the smallest broader check (build, type-check, tests) that catches collateral damage.
+5. Self-review the diff for regressions, security issues, missing tests, and scope creep.
 
-Quality checklist:
-- The solution addresses the root cause or requested behavior, not only a symptom.
-- The change is scoped, maintainable, and consistent with the repository.
-- Tests or verification are proportional to risk.
-- No secrets, placeholders, dead code, unrelated refactors, or unsupported claims are introduced.
+# Output format
+- Outcome first: what changed and why, in 1-3 lines.
+- Files changed as `path:line`, with the reason for each.
+- Verification commands run, with their actual results.
+- Residual risk, blockers, or follow-up checks. Keep preamble minimal.
 
-Return one final answer with implementation evidence."""
+# Quality checklist
+- Addresses the root cause or requested behavior, not only a symptom.
+- Scoped, maintainable, and consistent with the repository.
+- Verification is proportional to risk and was actually run, with evidence.
+- No secrets, dead code, unrelated refactors, or unsupported "done" claims.
+
+Match reasoning depth to difficulty: think harder on ambiguous or high-blast-radius changes. Return one final answer with implementation evidence."""
 
 
 def _writing_upgrade(clean: str) -> str:
@@ -407,41 +483,37 @@ Return one final answer in the most useful format."""
 def _general_execution_upgrade(clean: str) -> str:
     return f"""You are a senior domain expert and execution-quality reviewer.
 
-Mission:
+# Task
 Execute the user's request below and produce the strongest possible final answer. Do not merely rewrite the prompt.
 
-Original user request:
+## Original user request
 {_block(clean)}
 
-Grounding rules:
+# Grounding rules
 - Infer the real objective, audience, constraints, expected output, and success criteria from the request.
-- Ask at most one concise clarifying question only if a missing detail blocks a useful answer. Otherwise, state assumptions and proceed.
-- Use current authoritative sources when facts, tools, prices, laws, model capabilities, benchmarks, or public repositories may have changed.
-- Separate evidence from inference. Do not invent certainty.
+- Bias to action: state assumptions and proceed. Ask at most one question, and only if a missing detail blocks a useful answer.
+- Use current authoritative sources when facts, tools, prices, laws, model capabilities, benchmarks, or public repositories may have changed. Separate evidence from inference; do not invent certainty.
 - Avoid generic advice, filler, and unsupported claims.
 
-Execution workflow:
+# Workflow
 1. Restate the real objective in one sentence.
 2. Identify missing context, ambiguity, assumptions, risks, and decisions that could change the answer.
-3. Choose the response structure that best fits the request. Do not force proposals, matrices, or long frameworks when a direct answer is better.
+3. Choose the structure that fits the request. Right altitude: be specific enough to be useful, flexible enough not to overfit. Do not force proposals, matrices, or long frameworks when a direct answer is better.
 4. Compare alternatives only when the request involves a real decision or materially different paths.
 5. Produce the final answer with concrete steps, examples, trade-offs, and verification criteria where relevant.
 
-Output format:
-- Direct answer or executive verdict
-- Evidence, assumptions, and constraints
-- Options or approach comparison when useful
-- Recommended path
-- Concrete next steps
-- Risks, edge cases, and verification checks
+# Output format
+- Direct answer or executive verdict.
+- Evidence, assumptions, and constraints.
+- Options or approach comparison when useful.
+- Recommended path and concrete next steps.
+- Risks, edge cases, and verification checks.
 
-Quality checklist:
-- The output satisfies the user's real intent, not only the literal wording.
+# Quality checklist
+- Satisfies the user's real intent, not only the literal wording.
 - Assumptions are explicit when they affect the answer.
-- The answer includes enough context, constraints, and decision criteria to be actionable.
-- The output format is clear and appropriate for the task.
-- Risks, edge cases, dependencies, or verification steps are handled when relevant.
-- The answer removes unnecessary fluff and avoids generic advice.
+- Carries enough context, constraints, and decision criteria to be actionable.
+- Removes filler and avoids generic advice.
 
 Return one final answer in the most useful format for the inferred task."""
 
@@ -468,12 +540,14 @@ def _objective_score(lower: str, findings: list[Finding]) -> int:
     )
     if any(signal in lower for signal in signals):
         return 18
-    findings.append(Finding(
-        severity="P1",
-        code="weak_objective",
-        message="The prompt does not state a clear action or objective",
-        recommended_action="State what the AI should produce or decide",
-    ))
+    findings.append(
+        Finding(
+            severity="P1",
+            code="weak_objective",
+            message="The prompt does not state a clear action or objective",
+            recommended_action="State what the AI should produce or decide",
+        )
+    )
     return 8
 
 
@@ -482,12 +556,14 @@ def _context_score(lower: str, words: list[str], findings: list[Finding]) -> int
         return 15
     if len(words) >= 25:
         return 10
-    findings.append(Finding(
-        severity="P1",
-        code="thin_prompt",
-        message="The prompt is too short to carry reliable context",
-        recommended_action="Add user intent, background, target audience, and relevant constraints",
-    ))
+    findings.append(
+        Finding(
+            severity="P1",
+            code="thin_prompt",
+            message="The prompt is too short to carry reliable context",
+            recommended_action="Add user intent, background, target audience, and relevant constraints",
+        )
+    )
     return 4
 
 
@@ -495,38 +571,62 @@ def _constraint_score(lower: str, findings: list[Finding]) -> int:
     signals = ("constraint", "must", "do not", "avoid", "require", "only", "without", "hard rules")
     if any(signal in lower for signal in signals):
         return 15
-    findings.append(Finding(
-        severity="P1",
-        code="missing_constraints",
-        message="The prompt does not define constraints or non-goals",
-        recommended_action="Add must-have, must-avoid, and boundary conditions",
-    ))
+    findings.append(
+        Finding(
+            severity="P1",
+            code="missing_constraints",
+            message="The prompt does not define constraints or non-goals",
+            recommended_action="Add must-have, must-avoid, and boundary conditions",
+        )
+    )
     return 5
 
 
 def _output_format_score(lower: str, findings: list[Finding]) -> int:
-    signals = ("format", "return", "output", "json", "markdown", "table", "final answer", "response")
+    signals = (
+        "format",
+        "return",
+        "output",
+        "json",
+        "markdown",
+        "table",
+        "final answer",
+        "response",
+    )
     if any(signal in lower for signal in signals):
         return 15
-    findings.append(Finding(
-        severity="P1",
-        code="missing_output_format",
-        message="The prompt does not say what shape the answer should have",
-        recommended_action="Specify the desired output format and sections",
-    ))
+    findings.append(
+        Finding(
+            severity="P1",
+            code="missing_output_format",
+            message="The prompt does not say what shape the answer should have",
+            recommended_action="Specify the desired output format and sections",
+        )
+    )
     return 4
 
 
 def _verification_score(lower: str, findings: list[Finding]) -> int:
-    signals = ("verify", "test", "check", "score", "quality checklist", "criteria", "edge case", "risk")
+    signals = (
+        "verify",
+        "test",
+        "check",
+        "score",
+        "quality checklist",
+        "criteria",
+        "edge case",
+        "risk",
+    )
     if any(signal in lower for signal in signals):
         return 15
-    findings.append(Finding(
-        severity="P1",
-        code="missing_quality_gate",
-        message="The prompt does not include quality or verification criteria",
-        recommended_action="Add a checklist, scoring criteria, or verification steps",
-    ))
+    findings.append(
+        Finding(
+            severity="P1",
+            code="missing_quality_gate",
+            message="The prompt does not include quality or verification criteria",
+            recommended_action="Add a checklist, scoring criteria, or verification steps",
+        )
+    )
     return 3
 
 
@@ -535,12 +635,14 @@ def _specificity_score(words: list[str], findings: list[Finding]) -> int:
         return 10
     if len(words) >= 40:
         return 7
-    findings.append(Finding(
-        severity="P1",
-        code="low_specificity",
-        message="The prompt leaves too much room for generic output",
-        recommended_action="Add concrete domain, examples, desired depth, and constraints",
-    ))
+    findings.append(
+        Finding(
+            severity="P1",
+            code="low_specificity",
+            message="The prompt leaves too much room for generic output",
+            recommended_action="Add concrete domain, examples, desired depth, and constraints",
+        )
+    )
     return 3
 
 
@@ -548,12 +650,14 @@ def _ambiguity_score(lower: str, findings: list[Finding]) -> int:
     signals = ("assumption", "ambiguity", "missing context", "infer", "clarify", "decisions")
     if any(signal in lower for signal in signals):
         return 10
-    findings.append(Finding(
-        severity="P1",
-        code="no_ambiguity_control",
-        message="The prompt does not tell the AI how to handle ambiguity",
-        recommended_action="Ask the AI to infer, state assumptions, and ask only blocking questions",
-    ))
+    findings.append(
+        Finding(
+            severity="P1",
+            code="no_ambiguity_control",
+            message="The prompt does not tell the AI how to handle ambiguity",
+            recommended_action="Ask the AI to infer, state assumptions, and ask only blocking questions",
+        )
+    )
     return 3
 
 
