@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from agent_primer.models import SetupMode, SetupRequest
+from agent_primer.models import AiContextDraft, SetupMode, SetupRequest
 
 
 def test_new_project_requires_name_and_idea(tmp_path: Path):
@@ -36,6 +36,22 @@ def test_project_name_normalizes_spaces_to_hyphens(tmp_path: Path):
     )
 
     assert request.project_name == "My-Cool-Project"
+
+
+def test_ai_context_draft_coerces_real_world_llm_shapes():
+    # Shapes observed from a real OpenRouter response that previously crashed the
+    # new-project flow: stack as a dict, commands as a list, repo_map nested.
+    draft = AiContextDraft(
+        project_name="Demo",
+        product_summary="A demo app.",
+        detected_stack={"frontend_framework": "React", "test": "Vitest"},
+        verification_commands=["npm install", "npm run build"],
+        repo_map={"src/": {"components/": "UI components"}},
+    )
+
+    assert draft.detected_stack == ["frontend_framework: React", "test: Vitest"]
+    assert draft.verification_commands == {"1": "npm install", "2": "npm run build"}
+    assert draft.repo_map == ["src/: components/: UI components"]
 
 
 def test_existing_project_requires_existing_path(tmp_path: Path):

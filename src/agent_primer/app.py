@@ -331,15 +331,17 @@ async def _draft_new_project_context(
         data = await client.complete_json(
             request.openrouter_model, prompt, **model_request_options(request.openrouter_model)
         )
+        data.pop("project_name", None)
+        draft = AiContextDraft(project_name=fallback_name, **data)
     except Exception as exc:
-        # A key was configured but the AI draft failed. Keep the idea in the files via
-        # the fallback draft, and surface the failure instead of masquerading as success.
+        # A key was configured but the AI draft failed or returned an unusable shape.
+        # Keep the idea in the files via the fallback draft, and surface the failure
+        # instead of masquerading as success.
         warning = _ai_failure_warning(request.openrouter_model, exc)
         return AiContextDraft.example(
             project_name=fallback_name, product_idea=request.raw_idea
         ), warning
-    data.pop("project_name", None)
-    return AiContextDraft(project_name=fallback_name, **data), None
+    return draft, None
 
 
 async def _upgrade_prompt(request: PromptUpgradeRequest, store: ConfigStore) -> PromptUpgradeResult:

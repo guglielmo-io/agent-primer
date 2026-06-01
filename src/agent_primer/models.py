@@ -93,6 +93,48 @@ class RepoScan(BaseModel):
     entry_points: list[str] = Field(default_factory=list)
 
 
+def _flatten_scalar(value: object) -> str:
+    if isinstance(value, dict):
+        return ", ".join(f"{k}: {_flatten_scalar(v)}" for k, v in value.items())
+    if isinstance(value, (list, tuple)):
+        return ", ".join(_flatten_scalar(item) for item in value)
+    return str(value)
+
+
+def _as_str_list(value: object) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+    if isinstance(value, dict):
+        return [f"{k}: {_flatten_scalar(v)}" for k, v in value.items()]
+    if isinstance(value, (list, tuple)):
+        items: list[str] = []
+        for item in value:
+            if isinstance(item, dict):
+                items.extend(f"{k}: {_flatten_scalar(v)}" for k, v in item.items())
+            else:
+                items.append(str(item))
+        return items
+    return [str(value)]
+
+
+def _as_str_dict(value: object) -> dict[str, str]:
+    if value is None:
+        return {}
+    if isinstance(value, dict):
+        return {str(k): _flatten_scalar(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        commands: dict[str, str] = {}
+        for index, item in enumerate(value, start=1):
+            if isinstance(item, dict):
+                commands.update({str(k): _flatten_scalar(v) for k, v in item.items()})
+            else:
+                commands[str(index)] = str(item)
+        return commands
+    return {"command": str(value)}
+
+
 class AiContextDraft(BaseModel):
     project_name: str
     product_summary: str
@@ -104,6 +146,36 @@ class AiContextDraft(BaseModel):
     repo_map: list[str] = Field(default_factory=list)
     readiness_findings: list[str] = Field(default_factory=list)
     recommended_prompt: str = ""
+
+    # LLMs return these fields with inconsistent shapes (a stack as a dict, commands
+    # as a list, a nested repo map). Coerce to the documented shape so a usable AI
+    # draft survives instead of crashing the new-project flow.
+    @field_validator(
+        "detected_stack",
+        "architecture_notes",
+        "constraints",
+        "risks",
+        "repo_map",
+        "readiness_findings",
+        mode="before",
+    )
+    @classmethod
+    def _coerce_str_list(cls, value: object) -> list[str]:
+        return _as_str_list(value)
+
+    @field_validator("verification_commands", mode="before")
+    @classmethod
+    def _coerce_str_dict(cls, value: object) -> dict[str, str]:
+        return _as_str_dict(value)
+
+    @field_validator("product_summary", "recommended_prompt", mode="before")
+    @classmethod
+    def _coerce_str(cls, value: object) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, (dict, list, tuple)):
+            return _flatten_scalar(value)
+        return str(value)
 
     @classmethod
     def example(
