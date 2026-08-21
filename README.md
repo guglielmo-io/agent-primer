@@ -2,6 +2,12 @@
 
 **Prime any repository for AI coding agents before they touch code.**
 
+> **Archived on 21 August 2026. No longer maintained.** The problem this tool
+> solved was absorbed by the coding agents themselves while it was being built.
+> See [Project Status](#project-status-archived) for the reasoning, the evidence,
+> and the one component still worth taking.
+
+[![Status](https://img.shields.io/badge/Status-Archived-6b7280)](#project-status-archived)
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![CI](https://github.com/guglielmo-io/agent-primer/actions/workflows/ci.yml/badge.svg)](https://github.com/guglielmo-io/agent-primer/actions/workflows/ci.yml)
 [![FastAPI](https://img.shields.io/badge/FastAPI-local%20GUI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -13,6 +19,55 @@ Agent Primer is a local-first desktop-style GUI that creates, verifies, and repa
 It is not a coding agent. It prepares the repo so your coding agent starts with the right product context, architecture notes, verification commands, constraints, risks, and repo map.
 
 ![Agent Primer screenshot](docs/assets/agent-primer-ui.png)
+
+## Project Status: Archived
+
+Agent Primer was built to generate, score, and repair `AGENTS.md` and `docs/ai/*`
+context packs. Two things changed while it was being built, and together they
+removed the reason for the tool to exist.
+
+**1. Coding agents shipped native equivalents.** Generating a project context file
+is now a built-in command in Claude Code, Codex, Cursor, and Copilot. A separate
+tool for the generation step no longer earns its place in the workflow.
+
+**2. The evidence turned against generated context.** The ETH Zurich AGENTbench
+study (ICSE 2026) evaluated four coding agents across 138 real-world tasks in three
+conditions: no context file, an LLM-generated one, and a human-written one.
+LLM-generated files reduced task success in 5 of 8 settings, raised inference cost
+by 20 to 23 percent, and added roughly 2.5 to 3.9 reasoning steps per task.
+Human-written files outperformed generated ones by about 4 points. Generated files
+only improved results in repositories stripped of all other documentation.
+([summary](https://www.infoq.com/news/2026/03/agents-context-file-value-review/))
+
+The second point is the decisive one, because it invalidates the premise rather
+than the execution. This tool wrote structured context on top of repositories that
+already had a README and docs, which is precisely the case the study measured as
+net negative.
+
+### What this does not mean
+
+`AGENTS.md` itself is in good health. It is stewarded by the Linux Foundation's
+Agentic AI Foundation, is read by most major coding agents, and is in use across
+more than 60,000 repositories. The finding is about generating context files
+automatically, not about having them. Write them by hand and keep them short.
+
+### What is still worth taking
+
+[`src/agent_primer/scanner.py`](src/agent_primer/scanner.py) is a dependency-free,
+convention-agnostic repository scanner. It derives real build, test, and lint
+commands from `package.json`, `pyproject.toml`, `Makefile`, `justfile`, `Taskfile`,
+Maven, Gradle, dotnet, Composer, and Bundler, and detects CI configuration, entry
+points, and symbolic areas such as auth boundaries, API routes, database layers,
+and background jobs. It requires no model call and assumes no project conventions.
+MIT licensed, take it.
+
+### Alternatives
+
+- Generating a context file: the init command built into your coding agent.
+- Validating one against the codebase: [`ctxlint`](https://github.com/YawLabs/ctxlint), [`agents-lint`](https://github.com/giacomo/agents-lint).
+
+The rest of this README documents the project as it shipped and is left unchanged
+as a record.
 
 ## Why This Exists
 
@@ -223,14 +278,6 @@ node --check web/app.js
 - Existing project context files are not overwritten by setup.
 - Generated LLM JSON is validated before use.
 - User input is treated as untrusted path/config input.
-
-## Roadmap
-
-- Packageable desktop builds.
-- Better repo-map scoring from AST-aware scans.
-- Private benchmark runner for context quality.
-- Optional model comparison pass for new-project planning.
-- Context drift detection between docs and code.
 
 ## Related Standards And Ideas
 

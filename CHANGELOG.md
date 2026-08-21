@@ -2,6 +2,13 @@
 
 All notable changes to Agent Primer will be documented in this file.
 
+## Archived - 2026-08-21
+
+- Project archived and no longer maintained. Coding agents shipped native context-file
+  generation, and the ETH Zurich AGENTbench study (ICSE 2026) found LLM-generated context
+  files underperform hand-written ones. See the README for the full reasoning.
+- The changes below were completed but never released.
+
 ## Unreleased
 
 - Rebuilt Prompt Upgrade on researched LLM/coding-agent prompting best practices: weighted intent routing, a coding-optimized template (bias to action, anti-patterns, `rg`/`path:line`, narrow-to-broad verification), and an upgraded AI rewrite prompt.
